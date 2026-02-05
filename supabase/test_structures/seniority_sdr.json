@@ -1,0 +1,302 @@
+{
+  "test_type": "seniority_sdr",
+  "title": "Avaliação de Senioridade - SDR/BDR",
+  "description": "Avaliação de competências para Sales Development Representatives e Business Development Representatives focada em prospecção e qualificação de leads.",
+  "applicable_job_titles": ["SDR", "BDR"],
+  "version": 1,
+  "weights": {
+    "behavioral": 0.5,
+    "technical_prospecting": 0.3,
+    "process": 0.2
+  },
+  "categories": [
+    {
+      "id": "behavioral",
+      "name": "Competências Comportamentais",
+      "weight": 0.5,
+      "description": "Avalia características pessoais e comportamentais essenciais para o sucesso na prospecção.",
+      "questions": [
+        {
+          "id": "b1",
+          "text": "Demonstra resiliência ao lidar com rejeições e negativas frequentes?",
+          "category": "behavioral",
+          "dimension": "Resiliência",
+          "levels": {
+            "1": "Desanima facilmente com rejeições, afetando produtividade",
+            "2": "Mantém-se motivado na maior parte do tempo, mas precisa de suporte ocasional",
+            "3": "Transforma rejeições em aprendizado e mantém alta motivação constantemente"
+          }
+        },
+        {
+          "id": "b2",
+          "text": "Demonstra proatividade na busca por novos leads e oportunidades?",
+          "category": "behavioral",
+          "dimension": "Proatividade",
+          "levels": {
+            "1": "Aguarda direcionamento para buscar novos leads",
+            "2": "Busca ativamente leads dentro de listas fornecidas",
+            "3": "Identifica e explora novos canais e fontes de leads por conta própria"
+          }
+        },
+        {
+          "id": "b3",
+          "text": "É propositivo em sugerir melhorias nos processos de prospecção?",
+          "category": "behavioral",
+          "dimension": "Propositivo",
+          "levels": {
+            "1": "Raramente sugere melhorias ou questiona processos",
+            "2": "Ocasionalmente traz sugestões quando solicitado",
+            "3": "Constantemente identifica e propõe melhorias nos processos"
+          }
+        },
+        {
+          "id": "b4",
+          "text": "Demonstra autonomia para resolver problemas do dia a dia?",
+          "category": "behavioral",
+          "dimension": "Autonomia",
+          "levels": {
+            "1": "Precisa de orientação constante para tarefas rotineiras",
+            "2": "Resolve problemas conhecidos, consulta em situações novas",
+            "3": "Resolve problemas complexos de forma independente e eficaz"
+          }
+        },
+        {
+          "id": "b5",
+          "text": "Possui conhecimento profundo do produto/serviço e do mercado?",
+          "category": "behavioral",
+          "dimension": "Conhecimento",
+          "levels": {
+            "1": "Conhecimento básico, dificuldade em responder dúvidas técnicas",
+            "2": "Conhecimento adequado para qualificação inicial de leads",
+            "3": "Conhecimento avançado, capaz de educar prospects sobre o mercado"
+          }
+        },
+        {
+          "id": "b6",
+          "text": "Assume responsabilidade pelos resultados e metas pessoais?",
+          "category": "behavioral",
+          "dimension": "Responsabilidade",
+          "levels": {
+            "1": "Frequentemente atribui baixos resultados a fatores externos",
+            "2": "Reconhece responsabilidade, mas nem sempre age para corrigir",
+            "3": "Assume total responsabilidade e implementa ações corretivas"
+          }
+        },
+        {
+          "id": "b7",
+          "text": "Demonstra abertura para feedback e coaching (coachability)?",
+          "category": "behavioral",
+          "dimension": "Coachability",
+          "levels": {
+            "1": "Resistente a feedbacks, defensivo",
+            "2": "Aceita feedbacks mas demora a implementar mudanças",
+            "3": "Busca ativamente feedback e aplica rapidamente as orientações"
+          }
+        },
+        {
+          "id": "b8",
+          "text": "Está comprometido com as metas e objetivos do time?",
+          "category": "behavioral",
+          "dimension": "Comprometimento",
+          "levels": {
+            "1": "Foca apenas em tarefas, sem conexão com metas maiores",
+            "2": "Entende as metas e se esforça para contribuir",
+            "3": "Vai além do esperado para garantir que o time atinja as metas"
+          }
+        },
+        {
+          "id": "b9",
+          "text": "Mantém comunicação clara e frequente com o líder?",
+          "category": "behavioral",
+          "dimension": "Comunicação",
+          "levels": {
+            "1": "Comunicação irregular, líder precisa buscar informações",
+            "2": "Comunica quando solicitado ou em reuniões programadas",
+            "3": "Proativo em compartilhar insights, bloqueios e resultados"
+          }
+        },
+        {
+          "id": "b10",
+          "text": "Busca continuamente desenvolver novas habilidades?",
+          "category": "behavioral",
+          "dimension": "Desenvolvimento",
+          "levels": {
+            "1": "Participa apenas de treinamentos obrigatórios",
+            "2": "Busca desenvolvimento quando percebe gaps",
+            "3": "Proativo em buscar cursos, mentorias e novas técnicas"
+          }
+        }
+      ]
+    },
+    {
+      "id": "technical_prospecting",
+      "name": "Competências Técnicas de Prospecção",
+      "weight": 0.3,
+      "description": "Avalia habilidades técnicas específicas de prospecção, qualificação e geração de oportunidades.",
+      "questions": [
+        {
+          "id": "t1",
+          "text": "Domina técnicas de cold calling e abordagem inicial?",
+          "category": "technical_prospecting",
+          "dimension": "Cold Calling",
+          "levels": {
+            "1": "Dificuldade em quebrar gelo e manter conversação",
+            "2": "Consegue engajar prospects, mas sem consistência",
+            "3": "Altamente eficaz em abordagens frias, alta taxa de conversão"
+          }
+        },
+        {
+          "id": "t2",
+          "text": "Realiza qualificação eficaz de leads (BANT, GPCTBA/C&I, etc.)?",
+          "category": "technical_prospecting",
+          "dimension": "Qualificação",
+          "levels": {
+            "1": "Qualificação superficial, passa leads não qualificados",
+            "2": "Qualifica adequadamente usando frameworks básicos",
+            "3": "Qualificação profunda, identifica nuances e prioriza leads de alto valor"
+          }
+        },
+        {
+          "id": "t3",
+          "text": "Utiliza múltiplos canais de prospecção (e-mail, LinkedIn, WhatsApp, calls)?",
+          "category": "technical_prospecting",
+          "dimension": "Multicanal",
+          "levels": {
+            "1": "Depende majoritariamente de um canal",
+            "2": "Usa 2-3 canais de forma adequada",
+            "3": "Orquestra estratégia multicanal integrada e eficaz"
+          }
+        },
+        {
+          "id": "t4",
+          "text": "Elabora mensagens personalizadas e relevantes para cada prospect?",
+          "category": "technical_prospecting",
+          "dimension": "Personalização",
+          "levels": {
+            "1": "Usa templates genéricos sem personalização",
+            "2": "Personaliza com informações básicas (nome, empresa)",
+            "3": "Mensagens altamente personalizadas com pesquisa profunda do prospect"
+          }
+        },
+        {
+          "id": "t5",
+          "text": "Consegue superar objeções iniciais e gerar interesse?",
+          "category": "technical_prospecting",
+          "dimension": "Objeções",
+          "levels": {
+            "1": "Desiste facilmente diante de objeções",
+            "2": "Usa scripts para contornar objeções comuns",
+            "3": "Transforma objeções em oportunidades de conversação"
+          }
+        },
+        {
+          "id": "t6",
+          "text": "Agenda reuniões qualificadas com alta taxa de show-up?",
+          "category": "technical_prospecting",
+          "dimension": "Agendamento",
+          "levels": {
+            "1": "Baixa taxa de agendamentos e/ou alto no-show",
+            "2": "Taxa de agendamento e show-up adequadas",
+            "3": "Alta taxa de agendamentos qualificados com excelente show-up"
+          }
+        }
+      ]
+    },
+    {
+      "id": "process",
+      "name": "Competências de Processo",
+      "weight": 0.2,
+      "description": "Avalia a execução e aderência aos processos e ferramentas de prospecção.",
+      "questions": [
+        {
+          "id": "p1",
+          "text": "Executa cadências de prospecção de forma consistente?",
+          "category": "process",
+          "dimension": "Cadências",
+          "levels": {
+            "1": "Execução irregular, não segue cadências definidas",
+            "2": "Segue cadências na maior parte do tempo",
+            "3": "Execução disciplinada e otimizada de todas as cadências"
+          }
+        },
+        {
+          "id": "p2",
+          "text": "Realiza follow-ups de forma estruturada e persistente?",
+          "category": "process",
+          "dimension": "Follow-up",
+          "levels": {
+            "1": "Follow-ups esporádicos ou ausentes",
+            "2": "Realiza follow-ups planejados",
+            "3": "Sistema de follow-up impecável com alta conversão"
+          }
+        },
+        {
+          "id": "p3",
+          "text": "Respeita SLAs de resposta e agendamento?",
+          "category": "process",
+          "dimension": "SLA",
+          "levels": {
+            "1": "Frequentemente ultrapassa prazos estabelecidos",
+            "2": "Cumpre SLAs na maior parte do tempo",
+            "3": "Sempre cumpre ou supera SLAs estabelecidos"
+          }
+        },
+        {
+          "id": "p4",
+          "text": "Mantém CRM atualizado com informações completas e precisas?",
+          "category": "process",
+          "dimension": "CRM",
+          "levels": {
+            "1": "CRM frequentemente desatualizado ou incompleto",
+            "2": "Atualiza CRM regularmente com informações básicas",
+            "3": "CRM sempre atualizado com informações detalhadas e insights"
+          }
+        },
+        {
+          "id": "p5",
+          "text": "Mantém volume consistente de atividades (calls, e-mails, conexões)?",
+          "category": "process",
+          "dimension": "Volume",
+          "levels": {
+            "1": "Volume de atividades abaixo do esperado",
+            "2": "Atinge metas de atividades regularmente",
+            "3": "Supera consistentemente metas de atividades com qualidade"
+          }
+        },
+        {
+          "id": "p6",
+          "text": "Converte contatos em oportunidades qualificadas (SQLs)?",
+          "category": "process",
+          "dimension": "Conversão",
+          "levels": {
+            "1": "Taxa de conversão abaixo da média do time",
+            "2": "Taxa de conversão dentro da média esperada",
+            "3": "Taxa de conversão acima da média, referência no time"
+          }
+        }
+      ]
+    }
+  ],
+  "scoring_ranges": {
+    "behavioral": {
+      "junior": [10, 17],
+      "pleno": [18, 24],
+      "senior": [25, 30]
+    },
+    "technical_prospecting": {
+      "junior": [6, 10],
+      "pleno": [11, 14],
+      "senior": [15, 18]
+    },
+    "process": {
+      "junior": [6, 10],
+      "pleno": [11, 14],
+      "senior": [15, 18]
+    },
+    "global": {
+      "junior": [22, 37],
+      "pleno": [38, 52],
+      "senior": [53, 66]
+    }
+  }
+}

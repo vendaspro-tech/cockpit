@@ -1,0 +1,62 @@
+{
+  "test_type": "seniority_enablement",
+  "title": "Avaliação de Senioridade - Sales Enablement",
+  "description": "Avaliação de competências para profissionais de Sales Enablement focada em treinamento, conteúdo e capacitação do time comercial.",
+  "applicable_job_titles": ["Sales Enablement"],
+  "version": 1,
+  "weights": {
+    "behavioral": 0.4,
+    "technical_enablement": 0.4,
+    "process_training": 0.2
+  },
+  "categories": [
+    {
+      "id": "behavioral",
+      "name": "Competências Comportamentais",
+      "weight": 0.4,
+      "questions": [
+        {"id": "b1", "text": "Demonstra habilidade pedagógica e didática?", "dimension": "Didática"},
+        {"id": "b2", "text": "É proativo em identificar gaps de conhecimento do time?", "dimension": "Proatividade"},
+        {"id": "b3", "text": "Propõe soluções inovadoras de capacitação?", "dimension": "Inovação"},
+        {"id": "b4", "text": "Trabalha com autonomia no desenho de programas?", "dimension": "Autonomia"},
+        {"id": "b5", "text": "Possui conhecimento profundo de metodologias de vendas?", "dimension": "Conhecimento"},
+        {"id": "b6", "text": "Demonstra empatia e conexão com vendedores?", "dimension": "Empatia"},
+        {"id": "b7", "text": "Colabora com marketing, produto e vendas?", "dimension": "Colaboração"},
+        {"id": "b8", "text": "Está comprometido com desenvolvimento contínuo do time?", "dimension": "Comprometimento"}
+      ]
+    },
+    {
+      "id": "technical_enablement",
+      "name": "Competências Técnicas de Enablement",
+      "weight": 0.4,
+      "questions": [
+        {"id": "t1", "text": "Desenha programas de onboarding estruturados e eficazes?", "dimension": "Onboarding"},
+        {"id": "t2", "text": "Cria conteúdo de treinamento relevante e envolvente?", "dimension": "Conteúdo"},
+        {"id": "t3", "text": "Facilita treinamentos e workshops com alta qualidade?", "dimension": "Facilitação"},
+        {"id": "t4", "text": "Desenvolve playbooks, scripts e materiais de vendas?", "dimension": "Playbooks"},
+        {"id": "t5", "text": "Implementa metodologias de vendas (SPIN, MEDDIC, etc.)?", "dimension": "Metodologias"},
+        {"id": "t6", "text": "Mede eficácia de treinamentos e ROI de enablement?", "dimension": "Métricas"},
+        {"id": "t7", "text": "Utiliza LMS e ferramentas de enablement?", "dimension": "Ferramentas"},
+        {"id": "t8", "text": "Realiza coaching e sparrings individuais?", "dimension": "Coaching"}
+      ]
+    },
+    {
+      "id": "process_training",
+      "name": "Gestão de Treinamentos",
+      "weight": 0.2,
+      "questions": [
+        {"id": "p1", "text": "Planeja e executa calendário de treinamentos?", "dimension": "Planejamento"},
+        {"id": "p2", "text": "Mantém biblioteca de conteúdo atualizada e acessível?", "dimension": "Biblioteca"},
+        {"id": "p3", "text": "Avalia e certifica conhecimento dos vendedores?", "dimension": "Certificação"},
+        {"id": "p4", "text": "Adapta treinamentos baseado em feedback e resultados?", "dimension": "Adaptação"},
+        {"id": "p5", "text": "Garante transferência de conhecimento (learning transfer)?", "dimension": "Transferência"}
+      ]
+    }
+  ],
+  "scoring_ranges": {
+    "behavioral": {"junior": [8, 13], "pleno": [14, 19], "senior": [20, 24]},
+    "technical_enablement": {"junior": [8, 13], "pleno": [14, 19], "senior": [20, 24]},
+    "process_training": {"junior": [5, 8], "pleno": [9, 11], "senior": [12, 15]},
+    "global": {"junior": [21, 34], "pleno": [35, 49], "senior": [50, 63]}
+  }
+}

@@ -1,0 +1,61 @@
+{
+  "test_type": "seniority_social_seller",
+  "title": "Avaliação de Senioridade - Social Seller",
+  "description": "Avaliação de competências para vendedores especializados em vendas sociais e relacionamento digital.",
+  "applicable_job_titles": ["Social Seller"],
+  "version": 1,
+  "weights": {
+    "behavioral": 0.5,
+    "technical_social_selling": 0.3,
+    "process": 0.2
+  },
+  "categories": [
+    {
+      "id": "behavioral",
+      "name": "Competências Comportamentais",
+      "weight": 0.5,
+      "questions": [
+        {"id": "b1", "text": "Demonstra autenticidade e constrói confiança nas interações sociais?", "dimension": "Autenticidade"},
+        {"id": "b2", "text": "É proativo em criar e compartilhar conteúdo relevante?", "dimension": "Proatividade"},
+        {"id": "b3", "text": "Demonstra criatividade em abordagens e narrativas?", "dimension": "Criatividade"},
+        {"id": "b4", "text": "Mantém consistência e disciplina na presença digital?", "dimension": "Consistência"},
+        {"id": "b5", "text": "Possui conhecimento profundo de tendências e mercado?", "dimension": "Conhecimento"},
+        {"id": "b6", "text": "Demonstra empatia e habilidade de conexão genuína?", "dimension": "Empatia"},
+        {"id": "b7", "text": "Está comprometido com construção de marca pessoal?", "dimension": "Comprometimento"},
+        {"id": "b8", "text": "Demonstra ética e profissionalismo nas redes sociais?", "dimension": "Profissionalismo"}
+      ]
+    },
+    {
+      "id": "technical_social_selling",
+      "name": "Competências Técnicas de Social Selling",
+      "weight": 0.3,
+      "questions": [
+        {"id": "t1", "text": "Domina LinkedIn Sales Navigator e outras ferramentas sociais?", "dimension": "Ferramentas"},
+        {"id": "t2", "text": "Cria conteúdo relevante e engajador para a audiência-alvo?", "dimension": "Conteúdo"},
+        {"id": "t3", "text": "Identifica e engaja com prospects de alto valor?", "dimension": "Engajamento"},
+        {"id": "t4", "text": "Nutre relacionamentos de longo prazo efetivamente?", "dimension": "Relacionamento"},
+        {"id": "t5", "text": "Converte conexões sociais em oportunidades de negócio?", "dimension": "Conversão"},
+        {"id": "t6", "text": "Monitora e responde a sinais de compra nas redes sociais?", "dimension": "Monitoramento"}
+      ]
+    },
+    {
+      "id": "process",
+      "name": "Competências de Processo",
+      "weight": 0.2,
+      "questions": [
+        {"id": "p1", "text": "Mantém calendário editorial consistente?", "dimension": "Calendário"},
+        {"id": "p2", "text": "Documenta e registra interações no CRM?", "dimension": "CRM"},
+        {"id": "p3", "text": "Mede e otimiza métricas de engajamento?", "dimension": "Métricas"},
+        {"id": "p4", "text": "Atinge metas de conexões e engajamento?", "dimension": "Volume"},
+        {"id": "p5", "text": "Converte interações sociais em pipeline qualificado?", "dimension": "Pipeline"},
+        {"id": "p6", "text": "Colabora e compartilha best practices com o time?", "dimension": "Colaboração"}
+      ]
+    }
+  ],
+  "scoring_ranges": {
+    "behavioral": {"junior": [8, 13], "pleno": [14, 19], "senior": [20, 24]},
+    "technical_social_selling": {"junior": [6, 10], "pleno": [11, 14], "senior": [15, 18]},
+    "process": {"junior": [6, 10], "pleno": [11, 14], "senior": [15, 18]},
+    "global": {"junior": [20, 33], "pleno": [34, 47], "senior": [48, 60]}
+  }
+}

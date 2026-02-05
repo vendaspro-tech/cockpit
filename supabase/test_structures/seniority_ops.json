@@ -1,0 +1,62 @@
+{
+  "test_type": "seniority_ops",
+  "title": "Avaliação de Senioridade - Sales Operations",
+  "description": "Avaliação de competências para profissionais de operações de vendas focada em processos, ferramentas e análise de dados.",
+  "applicable_job_titles": ["Sales Operations"],
+  "version": 1,
+  "weights": {
+    "behavioral": 0.4,
+    "technical_ops": 0.4,
+    "process_management": 0.2
+  },
+  "categories": [
+    {
+      "id": "behavioral",
+      "name": "Competências Comportamentais",
+      "weight": 0.4,
+      "questions": [
+        {"id": "b1", "text": "Demonstra pensamento analítico e orientação a dados?", "dimension": "Análise"},
+        {"id": "b2", "text": "É proativo em identificar ineficiências nos processos?", "dimension": "Proatividade"},
+        {"id": "b3", "text": "Propõe soluções criativas para problemas operacionais?", "dimension": "Propositivo"},
+        {"id": "b4", "text": "Trabalha com autonomia em projetos complexos?", "dimension": "Autonomia"},
+        {"id": "b5", "text": "Possui conhecimento profundo de CRM e stack tecnológico?", "dimension": "Conhecimento"},
+        {"id": "b6", "text": "Demonstra atenção aos detalhes e precisão?", "dimension": "Precisão"},
+        {"id": "b7", "text": "Colabora efetivamente com vendas, marketing e CS?", "dimension": "Colaboração"},
+        {"id": "b8", "text": "Está comprometido com excelência operacional?", "dimension": "Comprometimento"}
+      ]
+    },
+    {
+      "id": "technical_ops",
+      "name": "Competências Técnicas de Ops",
+      "weight": 0.4,
+      "questions": [
+        {"id": "t1", "text": "Domina administração e customização de CRM?", "dimension": "CRM"},
+        {"id": "t2", "text": "Cria e mantém dashboards e relatórios de vendas?", "dimension": "Reporting"},
+        {"id": "t3", "text": "Analisa dados e extrai insights acionáveis?", "dimension": "Análise de Dados"},
+        {"id": "t4", "text": "Implementa e otimiza automações de processos?", "dimension": "Automação"},
+        {"id": "t5", "text": "Gerencia integrações entre sistemas (CRM, ERP, MA)?", "dimension": "Integrações"},
+        {"id": "t6", "text": "Define e acompanha KPIs e métricas de vendas?", "dimension": "KPIs"},
+        {"id": "t7", "text": "Realiza forecasting e análise de pipeline?", "dimension": "Forecasting"},
+        {"id": "t8", "text": "Documenta processos e cria SOPs (procedimentos)?", "dimension": "Documentação"}
+      ]
+    },
+    {
+      "id": "process_management",
+      "name": "Gestão de Processos",
+      "weight": 0.2,
+      "questions": [
+        {"id": "p1", "text": "Mapeia e otimiza jornadas e fluxos de vendas?", "dimension": "Mapeamento"},
+        {"id": "p2", "text": "Garante qualidade e higiene de dados no CRM?", "dimension": "Data Quality"},
+        {"id": "p3", "text": "Treina e suporta o time comercial em ferramentas?", "dimension": "Treinamento"},
+        {"id": "p4", "text": "Prioriza e gerencia múltiplos projetos simultaneamente?", "dimension": "Gestão de Projetos"},
+        {"id": "p5", "text": "Implementa melhorias com base em feedback do time?", "dimension": "Melhoria Contínua"}
+      ]
+    }
+  ],
+  "scoring_ranges": {
+    "behavioral": {"junior": [8, 13], "pleno": [14, 19], "senior": [20, 24]},
+    "technical_ops": {"junior": [8, 13], "pleno": [14, 19], "senior": [20, 24]},
+    "process_management": {"junior": [5, 8], "pleno": [9, 11], "senior": [12, 15]},
+    "global": {"junior": [21, 34], "pleno": [35, 49], "senior": [50, 63]}
+  }
+}

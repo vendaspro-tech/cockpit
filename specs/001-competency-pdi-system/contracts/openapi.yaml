@@ -1,0 +1,118 @@
+openapi: 3.0.3
+info:
+  title: Competency + Seniority (Foundations)
+  version: 0.1.0
+servers:
+  - url: http://localhost:3000
+paths:
+  /api/admin/job-titles:
+    get:
+      summary: List global job titles
+      responses:
+        '200':
+          description: OK
+    post:
+      summary: Create a global job title (super admin)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, hierarchy_level]
+              properties:
+                name: { type: string }
+                hierarchy_level: { type: integer, minimum: 0, maximum: 3 }
+                mission: { type: string }
+      responses:
+        '201': { description: Created }
+  /api/admin/competency-frameworks:
+    get:
+      summary: List global competency frameworks
+      responses:
+        '200': { description: OK }
+    post:
+      summary: Create a new framework version for a job title (super admin)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [job_title_id, structure]
+              properties:
+                job_title_id: { type: string, format: uuid }
+                structure: { type: object }
+      responses:
+        '201': { description: Created }
+  /api/workspaces/{workspaceId}/seniority-assessments:
+    post:
+      summary: Start a seniority v2 assessment
+      parameters:
+        - in: path
+          name: workspaceId
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [evaluated_user_id]
+              properties:
+                evaluated_user_id: { type: string, format: uuid }
+      responses:
+        '201': { description: Created }
+  /api/workspaces/{workspaceId}/seniority-assessments/{assessmentId}/submit-self:
+    post:
+      summary: Submit self-assessment responses
+      parameters:
+        - in: path
+          name: workspaceId
+          required: true
+          schema: { type: string, format: uuid }
+        - in: path
+          name: assessmentId
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200': { description: OK }
+  /api/workspaces/{workspaceId}/seniority-assessments/{assessmentId}/submit-leader:
+    post:
+      summary: Submit leader assessment responses
+      parameters:
+        - in: path
+          name: workspaceId
+          required: true
+          schema: { type: string, format: uuid }
+        - in: path
+          name: assessmentId
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200': { description: OK }
+  /api/workspaces/{workspaceId}/seniority-assessments/{assessmentId}/calibrate:
+    post:
+      summary: Calibrate and finalize an assessment (leader)
+      parameters:
+        - in: path
+          name: workspaceId
+          required: true
+          schema: { type: string, format: uuid }
+        - in: path
+          name: assessmentId
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [final_level]
+              properties:
+                final_level: { type: integer }
+                final_notes: { type: string }
+      responses:
+        '200': { description: OK }

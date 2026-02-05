@@ -1,0 +1,64 @@
+{
+  "test_type": "seniority_cs",
+  "title": "Avaliação de Senioridade - Customer Success",
+  "description": "Avaliação de competências para profissionais de Customer Success focada em retenção, expansão e sucesso do cliente.",
+  "applicable_job_titles": ["Customer Success"],
+  "version": 1,
+  "weights": {
+    "behavioral": 0.5,
+    "technical_cs": 0.3,
+    "process": 0.2
+  },
+  "categories": [
+    {
+      "id": "behavioral",
+      "name": "Competências Comportamentais",
+      "weight": 0.5,
+      "questions": [
+        {"id": "b1", "text": "Demonstra empatia genuína e foco no sucesso do cliente?", "dimension": "Empatia"},
+        {"id": "b2", "text": "É proativo em antecipar necessidades e riscos?", "dimension": "Proatividade"},
+        {"id": "b3", "text": "Propõe soluções criativas para desafios dos clientes?", "dimension": "Propositivo"},
+        {"id": "b4", "text": "Trabalha com autonomia em contas complexas?", "dimension": "Autonomia"},
+        {"id": "b5", "text": "Possui conhecimento profundo do produto e casos de uso?", "dimension": "Conhecimento"},
+        {"id": "b6", "text": "Assume responsabilidade pelo sucesso e renovação?", "dimension": "Responsabilidade"},
+        {"id": "b7", "text": "Demonstra coachability e busca melhoria contínua?", "dimension": "Coachability"},
+        {"id": "b8", "text": "Está comprometido com experiência excepcional do cliente?", "dimension": "Comprometimento"},
+        {"id": "b9", "text": "Comunica de forma clara e consultiva com clientes?", "dimension": "Comunicação"},
+        {"id": "b10", "text": "Constrói relacionamentos de confiança de longo prazo?", "dimension": "Relacionamento"}
+      ]
+    },
+    {
+      "id": "technical_cs",
+      "name": "Competências Técnicas de CS",
+      "weight": 0.3,
+      "questions": [
+        {"id": "t1", "text": "Conduz onboarding eficaz garantindo time-to-value rápido?", "dimension": "Onboarding"},
+        {"id": "t2", "text": "Realiza QBRs (revisões de negócio) de alto valor?", "dimension": "QBRs"},
+        {"id": "t3", "text": "Identifica e mitiga riscos de churn proativamente?", "dimension": "Churn Prevention"},
+        {"id": "t4", "text": "Identifica e converte oportunidades de upsell/cross-sell?", "dimension": "Expansão"},
+        {"id": "t5", "text": "Analisa dados de uso e health score efetivamente?", "dimension": "Análise de Dados"},
+        {"id": "t6", "text": "Gerencia escalações e resolve problemas complexos?", "dimension": "Resolução de Problemas"},
+        {"id": "t7", "text": "Coleta e age sobre feedback dos clientes (Voice of Customer)?", "dimension": "VOC"}
+      ]
+    },
+    {
+      "id": "process",
+      "name": "Competências de Processo",
+      "weight": 0.2,
+      "questions": [
+        {"id": "p1", "text": "Executa plano de sucesso (success plan) estruturado?", "dimension": "Success Plan"},
+        {"id": "p2", "text": "Mantém CRM atualizado com health scores e interações?", "dimension": "CRM"},
+        {"id": "p3", "text": "Gerencia renovações com antecedência e estratégia?", "dimension": "Renovações"},
+        {"id": "p4", "text": "Atinge metas de NPS, CSAT e adoção do produto?", "dimension": "Métricas"},
+        {"id": "p5", "text": "Realiza check-ins regulares e mantém cadência de contato?", "dimension": "Cadência"},
+        {"id": "p6", "text": "Converte clientes em advocates e gera referências?", "dimension": "Advocacy"}
+      ]
+    }
+  ],
+  "scoring_ranges": {
+    "behavioral": {"junior": [10, 17], "pleno": [18, 24], "senior": [25, 30]},
+    "technical_cs": {"junior": [7, 11], "pleno": [12, 16], "senior": [17, 21]},
+    "process": {"junior": [6, 10], "pleno": [11, 14], "senior": [15, 18]},
+    "global": {"junior": [23, 38], "pleno": [39, 54], "senior": [55, 69]}
+  }
+}

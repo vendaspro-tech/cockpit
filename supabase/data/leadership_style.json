@@ -1,0 +1,121 @@
+{
+  "id": "leadership_style",
+  "title": "Teste de Estilo de Liderança",
+  "description": "Descubra seu estilo predominante: Builder, Farmer ou Scale.",
+  "version": "1.0",
+  "categories": [
+    {
+      "id": "geral",
+      "name": "Estilo de Liderança",
+      "questions": [
+        {
+          "id": "q1",
+          "text": "Você acabou de assumir uma equipe sem playbook nem processos. Qual o primeiro sentimento?",
+          "options": [
+            { "label": "Oba!! Vou ter muito trabalho por aqui", "value": 1 },
+            { "label": "Eita... por que não me informei mais sobre a operação?", "value": 2 },
+            { "label": "Hum... vai demorar um pouco mais do que eu havia previsto pra bater as metas", "value": 3 }
+          ]
+        },
+        {
+          "id": "q2",
+          "text": "Como você lida com mudanças?",
+          "options": [
+            { "label": "Adoro testar novas abordagens e experimentar", "value": 1 },
+            { "label": "Prefiro mudanças controladas, minimizando riscos", "value": 2 },
+            { "label": "Mudo rápido e acelero ao máximo", "value": 3 }
+          ]
+        },
+        {
+          "id": "q3",
+          "text": "O quanto você gosta de ser desafiado?",
+          "options": [
+            { "label": "Gosto do friozinho na barriga", "value": 1 },
+            { "label": "Prefiro desafios que já tenham histórico de sucesso", "value": 2 },
+            { "label": "Gosto de fazer algo que ninguém fez e que me tire o sono", "value": 3 }
+          ]
+        },
+        {
+          "id": "q4",
+          "text": "O que mais te motiva como líder?",
+          "options": [
+            { "label": "Construir algo do zero e ver crescer", "value": 1 },
+            { "label": "Ver um processo rodando de forma estável e previsível", "value": 2 },
+            { "label": "Resultados rápidos e crescimento acelerado", "value": 3 }
+          ]
+        },
+        {
+          "id": "q5",
+          "text": "Como você prefere liderar sua equipe?",
+          "options": [
+            { "label": "Treinando e formando um time do zero", "value": 1 },
+            { "label": "Herdando talentos já rampados", "value": 2 },
+            { "label": "Contratando muitos talentos, independente da senioridade", "value": 3 }
+          ]
+        },
+        {
+          "id": "q6",
+          "text": "Ao receber um projeto novo, qual sua maior preocupação?",
+          "options": [
+            { "label": "Se terei autonomia para decisões", "value": 1 },
+            { "label": "Se existe um processo já validado", "value": 2 },
+            { "label": "Se querem crescer aceleradamente", "value": 3 }
+          ]
+        },
+        {
+          "id": "q7",
+          "text": "Como você mede o sucesso da sua liderança?",
+          "options": [
+            { "label": "Construção de algo inovador e sólido", "value": 1 },
+            { "label": "Manutenção da qualidade e desempenho estável", "value": 2 },
+            { "label": "Crescimento acelerado e superação de metas", "value": 3 }
+          ]
+        },
+        {
+          "id": "q8",
+          "text": "Seu time está com baixo desempenho, o que você faz?",
+          "options": [
+            { "label": "Mudo a estratégia completamente e começo de novo", "value": 1 },
+            { "label": "Identifico erros e corrijo sem grandes mudanças", "value": 2 },
+            { "label": "Aumento metas e aplico estratégias mais agressivas", "value": 3 }
+          ]
+        },
+        {
+          "id": "q9",
+          "text": "Se tivesse que escolher um desafio, qual preferiria?",
+          "options": [
+            { "label": "Criar um setor comercial do zero", "value": 1 },
+            { "label": "Gerenciar uma operação existente e mantê-la eficiente", "value": 2 },
+            { "label": "Escalar um time com bons resultados para crescer mais rápido", "value": 3 }
+          ]
+        },
+        {
+          "id": "q10",
+          "text": "Qual sua relação com metas e crescimento?",
+          "options": [
+            { "label": "Criar base antes de definir metas agressivas", "value": 1 },
+            { "label": "Metas progressivas e alcançáveis", "value": 2 },
+            { "label": "Crescimento acelerado e metas desafiadoras", "value": 3 }
+          ]
+        }
+      ]
+    }
+  ],
+  "results": [
+    {
+      "range": { "min": 10, "max": 16 },
+      "label": "Builder",
+      "description": "Você é o arquiteto de oportunidades. Líder Builder é movido pela criação."
+    },
+    {
+      "range": { "min": 17, "max": 23 },
+      "label": "Farmer",
+      "description": "Você é o guardião da previsibilidade. Líder Farmer cultiva eficiência."
+    },
+    {
+      "range": { "min": 24, "max": 30 },
+      "label": "Scale",
+      "description": "Você é o acelerador. Líder Scale pensa grande, rápido e em ciclos curtos."
+    }
+  ]
+}

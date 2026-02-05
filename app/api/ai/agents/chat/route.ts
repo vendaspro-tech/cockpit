@@ -48,7 +48,13 @@ export async function POST(request: NextRequest) {
       .eq("id", agentId)
       .maybeSingle()
 
-    if (agentError || !agent) {
+    if (agentError) {
+      console.error("Agent lookup error:", agentError)
+      return NextResponse.json({ error: "Erro ao buscar agente" }, { status: 500 })
+    }
+
+    if (!agent) {
+      console.error("Agent not found:", { agentId })
       return NextResponse.json({ error: "Agente não encontrado" }, { status: 404 })
     }
 
@@ -147,6 +153,26 @@ export async function POST(request: NextRequest) {
       console.error("RAG error:", ragError)
     }
 
+    const { data: attachments, error: attachmentsError } = await supabase
+      .from("ai_conversation_attachments")
+      .select("filename, extracted_text")
+      .eq("conversation_id", resolvedConversationId)
+      .order("created_at", { ascending: false })
+      .limit(5)
+
+    if (attachmentsError) {
+      console.error("Attachment fetch error:", attachmentsError)
+    }
+
+    const attachmentContext = (attachments ?? [])
+      .filter((att) => att.extracted_text)
+      .map((att) => {
+        const text = String(att.extracted_text || "")
+        const preview = text.length > 4000 ? `${text.slice(0, 4000)}...` : text
+        return `**[ANEXO] ${att.filename}**\n${preview}`
+      })
+      .join("\n\n---\n\n")
+
     const contextMarkdown = (ragResults ?? [])
       .map(
         (doc: any) =>
@@ -157,6 +183,10 @@ export async function POST(request: NextRequest) {
     const systemPrompt = `${agent.system_prompt || ""}${
       contextMarkdown
         ? `\n\n## CONTEXTO RELEVANTE\n\n${contextMarkdown}\n\nUse este contexto para responder de forma mais precisa. Se não for relevante, ignore.`
+        : ""
+    }${
+      attachmentContext
+        ? `\n\n## ANEXOS DA CONVERSA\n\n${attachmentContext}\n\nUse apenas se for útil para a resposta.`
         : ""
     }`
 

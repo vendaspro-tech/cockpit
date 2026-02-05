@@ -9,12 +9,14 @@ import { Separator } from "@/components/ui/separator"
 import { useToast } from "@/hooks/use-toast"
 import {
   deleteConversation,
+  getConversationAttachments,
   getConversationMessages,
   getUserConversations,
   type ConversationMessage,
   type ConversationSummary,
+  type ConversationAttachment,
 } from "@/app/actions/ai-agents"
-import { Mic, MicOff, Plus, Trash } from "lucide-react"
+import { Plus, Trash } from "lucide-react"
 
 type AgentChatProps = {
   agentId: string
@@ -39,10 +41,9 @@ export function AgentChat({
   const [messages, setMessages] = useState<ConversationMessage[]>(initialMessages)
   const [input, setInput] = useState("")
   const [loading, setLoading] = useState(false)
-  const [recording, setRecording] = useState(false)
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null)
-  const chunksRef = useRef<Blob[]>([])
-  const streamRef = useRef<MediaStream | null>(null)
+  const [attachments, setAttachments] = useState<ConversationAttachment[]>([])
+  const [uploading, setUploading] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement | null>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
 
   const selectedConversation = useMemo(
@@ -63,11 +64,14 @@ export function AgentChat({
     setSelectedId(conversationId)
     const data = await getConversationMessages(conversationId)
     setMessages(data)
+    const files = await getConversationAttachments(conversationId)
+    setAttachments(files)
   }
 
   const handleNewConversation = () => {
     setSelectedId(null)
     setMessages([])
+    setAttachments([])
   }
 
   const handleDeleteConversation = async (conversationId: string) => {
@@ -84,6 +88,7 @@ export function AgentChat({
     if (selectedId === conversationId) {
       setSelectedId(null)
       setMessages([])
+      setAttachments([])
     }
   }
 
@@ -131,6 +136,8 @@ export function AgentChat({
 
       if (!selectedId) {
         setSelectedId(result.conversationId)
+        const files = await getConversationAttachments(result.conversationId)
+        setAttachments(files)
       }
 
       await refreshConversations()
@@ -141,53 +148,43 @@ export function AgentChat({
     }
   }
 
-  const handleRecordToggle = async () => {
-    if (recording) {
-      mediaRecorderRef.current?.stop()
-      setRecording(false)
-      return
-    }
 
+  const handleAttachmentClick = () => {
+    fileInputRef.current?.click()
+  }
+
+  const handleAttachmentUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+    setUploading(true)
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-      streamRef.current = stream
-      const recorder = new MediaRecorder(stream)
-      chunksRef.current = []
+      const formData = new FormData()
+      formData.append("file", file)
+      formData.append("agentId", agentId)
+      formData.append("workspaceId", workspaceId)
+      if (selectedId) formData.append("conversationId", selectedId)
 
-      recorder.ondataavailable = (event) => {
-        if (event.data.size > 0) chunksRef.current.push(event.data)
+      const response = await fetch("/api/ai/agents/attachments/upload", {
+        method: "POST",
+        body: formData,
+      })
+      const result = await response.json()
+      if (!response.ok) {
+        toast({ title: "Erro", description: result.error || "Falha ao enviar arquivo", variant: "destructive" })
+        return
       }
 
-      recorder.onstop = async () => {
-        const blob = new Blob(chunksRef.current, { type: "audio/webm" })
-        const file = new File([blob], "audio.webm", { type: "audio/webm" })
-        const formData = new FormData()
-        formData.append("file", file)
-
-        try {
-          const response = await fetch("/api/ai/agents/transcribe", {
-            method: "POST",
-            body: formData,
-          })
-          const result = await response.json()
-          if (!response.ok) {
-            toast({ title: "Erro", description: result.error || "Falha ao transcrever áudio", variant: "destructive" })
-            return
-          }
-          setInput((prev) => `${prev} ${result.text}`.trim())
-        } catch (error) {
-          toast({ title: "Erro", description: "Falha ao transcrever áudio.", variant: "destructive" })
-        }
-
-        streamRef.current?.getTracks().forEach((track) => track.stop())
-        streamRef.current = null
+      if (!selectedId && result.conversationId) {
+        setSelectedId(result.conversationId)
       }
 
-      recorder.start()
-      mediaRecorderRef.current = recorder
-      setRecording(true)
+      setAttachments((prev) => [result.attachment, ...prev])
+      toast({ title: "Arquivo anexado", description: "Anexo disponível para esta conversa." })
     } catch (error) {
-      toast({ title: "Erro", description: "Permissão de microfone necessária.", variant: "destructive" })
+      toast({ title: "Erro", description: "Falha ao enviar arquivo.", variant: "destructive" })
+    } finally {
+      setUploading(false)
+      if (fileInputRef.current) fileInputRef.current.value = ""
     }
   }
 
@@ -274,6 +271,25 @@ export function AgentChat({
           <Separator />
 
           <div className="space-y-2">
+            <input
+              ref={fileInputRef}
+              type="file"
+              className="hidden"
+              accept=".txt,.pdf,.csv"
+              onChange={handleAttachmentUpload}
+            />
+            {attachments.length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                {attachments.map((att) => (
+                  <span
+                    key={att.id}
+                    className="rounded-full bg-muted px-3 py-1 text-xs text-muted-foreground"
+                  >
+                    {att.filename}
+                  </span>
+                ))}
+              </div>
+            )}
             <Textarea
               value={input}
               onChange={(e) => setInput(e.target.value)}
@@ -287,9 +303,8 @@ export function AgentChat({
               }}
             />
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <Button variant="outline" onClick={handleRecordToggle}>
-                {recording ? <MicOff className="mr-2 h-4 w-4" /> : <Mic className="mr-2 h-4 w-4" />}
-                {recording ? "Parar gravação" : "Gravar áudio"}
+              <Button variant="outline" onClick={handleAttachmentClick} disabled={uploading}>
+                {uploading ? "Enviando..." : "Anexar arquivo"}
               </Button>
               <Button onClick={handleSend} disabled={loading || !input.trim()}>
                 Enviar

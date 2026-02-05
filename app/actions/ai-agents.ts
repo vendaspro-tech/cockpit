@@ -28,6 +28,14 @@ export type ConversationMessage = {
   metadata: Record<string, any>
 }
 
+export type ConversationAttachment = {
+  id: string
+  filename: string
+  mime_type: string
+  size_bytes: number
+  created_at: string
+}
+
 const DeleteConversationSchema = z.object({
   conversationId: z.string().uuid(),
 })
@@ -95,6 +103,22 @@ export async function getConversationMessages(conversationId: string): Promise<C
   }
 
   return (data ?? []) as ConversationMessage[]
+}
+
+export async function getConversationAttachments(conversationId: string): Promise<ConversationAttachment[]> {
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from("ai_conversation_attachments")
+    .select("id, filename, mime_type, size_bytes, created_at")
+    .eq("conversation_id", conversationId)
+    .order("created_at", { ascending: false })
+
+  if (error) {
+    console.error("Error fetching attachments:", error)
+    return []
+  }
+
+  return (data ?? []) as ConversationAttachment[]
 }
 
 export async function deleteConversation(input: z.infer<typeof DeleteConversationSchema>) {

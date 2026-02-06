@@ -118,6 +118,7 @@ export default async function SettingsPage({ params, searchParams }: SettingsPag
                 roles={roles}
                 jobTitles={jobTitles}
                 currentUserRole={role}
+                currentUserSupabaseId={user.id}
             />
         )}
         {currentTab === 'billing' && (

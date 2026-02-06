@@ -30,6 +30,7 @@ export async function getJobTitles(workspaceId: string) {
 }
 
 import { getUserRole } from "@/lib/auth-utils"
+import { ensureSupabaseUser } from "@/lib/supabase/user"
 
 export async function updateMemberJobTitle(workspaceId: string, memberId: string, jobTitleId: string | null) {
   const supabase = await createClient()
@@ -96,7 +97,7 @@ export async function updateMemberRole(workspaceId: string, memberId: string, ne
   // Verify if member belongs to workspace
   const { data: member, error: memberError } = await supabase
     .from('workspace_members')
-    .select('id, role')
+    .select('id, role, access_level, user_id')
     .eq('id', memberId)
     .eq('workspace_id', workspaceId)
     .single()
@@ -105,12 +106,21 @@ export async function updateMemberRole(workspaceId: string, memberId: string, ne
     return { error: 'Membro não encontrado' }
   }
 
+  if (member.access_level === 'owner' && currentUserRole === 'admin') {
+    return { error: 'Apenas proprietários podem alterar outro proprietário' }
+  }
+
+  const { userId: currentUserId } = await ensureSupabaseUser(user.id)
+  if (currentUserId && member.user_id === currentUserId && newRoleSlug === 'member' && currentUserRole === 'owner') {
+    return { error: 'Você não pode rebaixar seu próprio acesso' }
+  }
+
   // Prevent changing own role if it leads to losing admin access (optional safety check, but maybe too complex for now)
   // For now, just update.
 
   const { error } = await supabase
     .from('workspace_members')
-    .update({ role: newRoleSlug })
+    .update({ access_level: newRoleSlug })
     .eq('id', memberId)
 
   if (error) {
@@ -119,6 +129,53 @@ export async function updateMemberRole(workspaceId: string, memberId: string, ne
   }
 
   revalidatePath(`/${workspaceId}/teams`)
+  revalidatePath(`/${workspaceId}/settings`)
+  return { success: true }
+}
+
+export async function removeMemberFromWorkspace(workspaceId: string, memberId: string) {
+  const user = await getAuthUser()
+  if (!user) return { error: 'Não autorizado' }
+
+  const currentUserRole = await getUserRole(user.id, workspaceId)
+  if (currentUserRole !== 'system_owner' && currentUserRole !== 'owner' && currentUserRole !== 'admin') {
+    return { error: 'Permissão insuficiente para remover membros' }
+  }
+
+  const supabase = await createClient()
+
+  const { data: member, error: memberError } = await supabase
+    .from('workspace_members')
+    .select('id, access_level, user_id')
+    .eq('id', memberId)
+    .eq('workspace_id', workspaceId)
+    .single()
+
+  if (memberError || !member) {
+    return { error: 'Membro não encontrado' }
+  }
+
+  if (member.access_level === 'owner' && currentUserRole === 'admin') {
+    return { error: 'Apenas proprietários podem remover outro proprietário' }
+  }
+
+  const { userId: currentUserId } = await ensureSupabaseUser(user.id)
+  if (currentUserId && member.user_id === currentUserId) {
+    return { error: 'Você não pode remover a si mesmo' }
+  }
+
+  const { error } = await supabase
+    .from('workspace_members')
+    .delete()
+    .eq('id', memberId)
+
+  if (error) {
+    console.error('Error removing member:', error)
+    return { error: 'Erro ao remover membro do workspace' }
+  }
+
+  revalidatePath(`/${workspaceId}/teams`)
+  revalidatePath(`/${workspaceId}/settings`)
   return { success: true }
 }
 

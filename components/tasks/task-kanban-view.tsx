@@ -6,10 +6,11 @@ import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
 import { Clock, MoreHorizontal, Pencil, Copy, Trash2 } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { updateStandaloneTask, duplicateTask, deleteStandaloneTask } from "@/app/actions/tasks"
-import { togglePDIActionComplete } from "@/app/actions/pdi"
+import { updateStandaloneTask, duplicateTask, deleteStandaloneTask, updateExecutionActionStatus } from "@/app/actions/tasks"
+import { updatePDIActionStatus } from "@/app/actions/pdi"
 import { toast } from "sonner"
 import { useState } from "react"
+import type { DragEvent } from "react"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -30,6 +31,8 @@ export function TaskKanbanView({ tasks }: TaskKanbanViewProps) {
   const [showStandalone, setShowStandalone] = useState(true)
   const [showCompleted, setShowCompleted] = useState(true)
   const [editingTask, setEditingTask] = useState<UnifiedTask | null>(null)
+  const [draggingTaskId, setDraggingTaskId] = useState<string | null>(null)
+  const [dragOverColumn, setDragOverColumn] = useState<string | null>(null)
 
   const filteredTasks = optimisticTasks.filter(task => {
     if (!showPDI && task.type === 'pdi_action') return false
@@ -48,10 +51,15 @@ export function TaskKanbanView({ tasks }: TaskKanbanViewProps) {
 
     try {
       if (task.type === 'standalone_task') {
-        await updateStandaloneTask(task.id, { status: newStatus })
+        const result = await updateStandaloneTask(task.id, { status: newStatus })
+        if (result?.error) throw new Error(result.error)
+      } else if (task.type === 'pdi_action') {
+        const pdiStatus = newStatus === 'todo' ? 'pending' : newStatus === 'in_progress' ? 'in_progress' : 'done'
+        const result = await updatePDIActionStatus(task.id, pdiStatus)
+        if (result?.error) throw new Error(result.error)
       } else {
-        const isCompleted = newStatus === 'done'
-        await togglePDIActionComplete(task.id, isCompleted)
+        const result = await updateExecutionActionStatus(task.id, newStatus)
+        if (result?.error) throw new Error(result.error)
       }
       toast.success('Status atualizado')
     } catch (error) {
@@ -61,6 +69,31 @@ export function TaskKanbanView({ tasks }: TaskKanbanViewProps) {
       ))
       toast.error('Erro ao atualizar status')
     }
+  }
+
+  const handleDragStart = (event: DragEvent<HTMLDivElement>, task: UnifiedTask) => {
+    event.dataTransfer.setData('text/plain', task.id)
+    event.dataTransfer.effectAllowed = 'move'
+    setDraggingTaskId(task.id)
+  }
+
+  const handleDragEnd = () => {
+    setDraggingTaskId(null)
+    setDragOverColumn(null)
+  }
+
+  const handleDragOver = (event: DragEvent<HTMLDivElement>, columnId: string) => {
+    event.preventDefault()
+    setDragOverColumn(columnId)
+  }
+
+  const handleDrop = (event: DragEvent<HTMLDivElement>, columnId: 'todo' | 'in_progress' | 'done') => {
+    event.preventDefault()
+    const taskId = event.dataTransfer.getData('text/plain')
+    const task = optimisticTasks.find(t => t.id === taskId)
+    setDragOverColumn(null)
+    if (!task) return
+    void handleStatusChange(task, columnId)
   }
 
   const handleDuplicate = async (task: UnifiedTask) => {
@@ -130,11 +163,28 @@ export function TaskKanbanView({ tasks }: TaskKanbanViewProps) {
               </Badge>
             </div>
             
-            <div className="flex-1 overflow-y-auto p-3 space-y-3">
+            <div
+              className={cn(
+                "flex-1 overflow-y-auto p-3 space-y-3 transition-colors",
+                dragOverColumn === column.id ? "bg-muted/40" : ""
+              )}
+              onDragOver={(event) => handleDragOver(event, column.id)}
+              onDragLeave={() => setDragOverColumn(null)}
+              onDrop={(event) => handleDrop(event, column.id as 'todo' | 'in_progress' | 'done')}
+            >
               {filteredTasks
                 .filter(task => task.status === column.id)
                 .map(task => (
-                <div key={task.id} className="bg-card p-3 rounded-lg border shadow-sm hover:shadow-md transition-all group">
+                <div
+                  key={task.id}
+                  className={cn(
+                    "bg-card p-3 rounded-lg border shadow-sm hover:shadow-md transition-all group",
+                    draggingTaskId === task.id ? "opacity-60" : "cursor-grab active:cursor-grabbing"
+                  )}
+                  draggable
+                  onDragStart={(event) => handleDragStart(event, task)}
+                  onDragEnd={handleDragEnd}
+                >
                   <div className="flex items-start justify-between gap-2 mb-2">
                     <span className={cn(
                       "text-xs font-medium px-1.5 py-0.5 rounded border",

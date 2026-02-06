@@ -1,3 +1,6 @@
+'use client'
+
+import { useTransition } from "react"
 import { InviteUserDialog } from "@/components/teams/invite-user-dialog"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
@@ -9,9 +12,12 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import { removeMemberFromWorkspace, updateMemberRole } from "@/app/actions/teams"
 
 interface UsersSettingsProps {
   workspaceId: string
@@ -21,6 +27,7 @@ interface UsersSettingsProps {
   roles: any[]
   jobTitles?: any[]
   currentUserRole: string
+  currentUserSupabaseId: string
 }
 
 export function UsersSettings({
@@ -30,8 +37,11 @@ export function UsersSettings({
   planUsage,
   roles,
   jobTitles,
-  currentUserRole
+  currentUserRole,
+  currentUserSupabaseId
 }: UsersSettingsProps) {
+  const [isPending, startTransition] = useTransition()
+
   const roleLabels: Record<string, string> = {
     'system_owner': 'Proprietário do Sistema',
     'owner': 'Proprietário',
@@ -40,6 +50,29 @@ export function UsersSettings({
   }
 
   const canManage = ['owner', 'admin', 'system_owner'].includes(currentUserRole)
+
+  const getAccessLevel = (member: any) => member.access_level || member.role || 'member'
+
+  const handleRoleChange = (memberId: string, newRole: string) => {
+    startTransition(async () => {
+      const result = await updateMemberRole(workspaceId, memberId, newRole)
+      if (result?.error) {
+        alert(result.error)
+      }
+    })
+  }
+
+  const handleRemoveMember = (memberId: string) => {
+    const confirmed = window.confirm('Tem certeza que deseja remover este membro do workspace?')
+    if (!confirmed) return
+
+    startTransition(async () => {
+      const result = await removeMemberFromWorkspace(workspaceId, memberId)
+      if (result?.error) {
+        alert(result.error)
+      }
+    })
+  }
 
   return (
     <div className="space-y-6">
@@ -81,7 +114,7 @@ export function UsersSettings({
                 </div>
               </div>
               <div className="flex items-center gap-2">
-                <Badge variant="outline">{roleLabels[member.role] || member.role}</Badge>
+                <Badge variant="outline">{roleLabels[getAccessLevel(member)] || getAccessLevel(member)}</Badge>
                 {canManage && (
                     <DropdownMenu>
                     <DropdownMenuTrigger asChild>
@@ -92,9 +125,34 @@ export function UsersSettings({
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
                         <DropdownMenuLabel>Ações</DropdownMenuLabel>
-                        <DropdownMenuItem disabled>Editar Função (Em breve)</DropdownMenuItem>
+                        <DropdownMenuLabel className="text-xs text-muted-foreground">Editar Função</DropdownMenuLabel>
+                        <DropdownMenuRadioGroup
+                          value={getAccessLevel(member)}
+                          onValueChange={(value) => handleRoleChange(member.id, value)}
+                        >
+                          {roles.map((role) => (
+                            <DropdownMenuRadioItem
+                              key={role.slug}
+                              value={role.slug}
+                              disabled={
+                                isPending ||
+                                (getAccessLevel(member) === 'owner' && currentUserRole === 'admin')
+                              }
+                            >
+                              {role.name}
+                            </DropdownMenuRadioItem>
+                          ))}
+                        </DropdownMenuRadioGroup>
                         <DropdownMenuSeparator />
-                        <DropdownMenuItem className="text-destructive">
+                        <DropdownMenuItem
+                          className="text-destructive"
+                          disabled={
+                            isPending ||
+                            member.user?.supabase_user_id === currentUserSupabaseId ||
+                            (getAccessLevel(member) === 'owner' && currentUserRole === 'admin')
+                          }
+                          onClick={() => handleRemoveMember(member.id)}
+                        >
                              Remover do Workspace
                         </DropdownMenuItem>
                     </DropdownMenuContent>

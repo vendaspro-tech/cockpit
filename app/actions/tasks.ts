@@ -282,6 +282,25 @@ export async function updateStandaloneTask(taskId: string, updates: Partial<Crea
   return { success: true }
 }
 
+export async function updateExecutionActionStatus(actionId: string, status: TaskStatus) {
+  const supabase = await createClient()
+
+  const { error } = await supabase
+    .from('execution_actions')
+    .update({
+      status,
+      completed_at: status === 'done' ? new Date().toISOString() : null
+    })
+    .eq('id', actionId)
+
+  if (error) {
+    return { error: 'Erro ao atualizar ação estratégica' }
+  }
+
+  revalidatePath('/tasks')
+  return { success: true }
+}
+
 /**
  * Duplicate a standalone task
  */

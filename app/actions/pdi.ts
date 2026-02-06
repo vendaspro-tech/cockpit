@@ -656,6 +656,119 @@ export async function togglePDIActionComplete(actionId: string, completed: boole
   }
 }
 
+export async function updatePDIActionStatus(
+  actionId: string,
+  status: 'pending' | 'in_progress' | 'done'
+) {
+  const { createAdminClient } = await import('@/lib/supabase/admin')
+  const supabase = createAdminClient()
+
+  const { error: actionError } = await supabase
+    .from('pdi_actions')
+    .update({
+      status,
+      completed_at: status === 'done' ? new Date().toISOString() : null
+    })
+    .eq('id', actionId)
+
+  if (actionError) {
+    console.error('[updatePDIActionStatus] Error updating action:', actionError)
+    return { error: 'Erro ao atualizar ação' }
+  }
+
+  const { data: action } = await supabase
+    .from('pdi_actions')
+    .select('pdi_item_id, pdi_items!inner(pdi_plan_id, status)')
+    .eq('id', actionId)
+    .single()
+
+  if (!action) {
+    return { success: true }
+  }
+
+  const actionRow = action as unknown as {
+    pdi_item_id: string
+    pdi_items: { pdi_plan_id: string; status: 'not_started' | 'in_progress' | 'completed' } | null
+  }
+  const pdiItemId = actionRow.pdi_item_id
+  const pdiItemInfo = actionRow.pdi_items
+
+  if (!pdiItemInfo) {
+    return { success: true }
+  }
+
+  const pdiPlanId = pdiItemInfo.pdi_plan_id
+  const currentItemStatus = pdiItemInfo.status
+
+  const { data: itemActions } = await supabase
+    .from('pdi_actions')
+    .select('id, status')
+    .eq('pdi_item_id', pdiItemId)
+
+  let itemCompleted = false
+  let itemStatusMessage = null
+
+  if (itemActions && itemActions.length > 0) {
+    const allActionsDone = itemActions.every(a => a.status === 'done')
+    
+    if (allActionsDone && currentItemStatus !== 'completed') {
+      await supabase
+        .from('pdi_items')
+        .update({ status: 'completed' })
+        .eq('id', pdiItemId)
+      
+      itemCompleted = true
+      itemStatusMessage = 'Item de PDI concluído automaticamente! 🎉'
+    }
+    else if (!allActionsDone && currentItemStatus === 'completed') {
+      await supabase
+        .from('pdi_items')
+        .update({ status: 'in_progress' })
+        .eq('id', pdiItemId)
+    }
+    else if (itemActions.some(a => a.status === 'done') && currentItemStatus === 'not_started') {
+      await supabase
+        .from('pdi_items')
+        .update({ status: 'in_progress' })
+        .eq('id', pdiItemId)
+    }
+  }
+
+  const { data: allItems } = await supabase
+    .from('pdi_items')
+    .select('id, status')
+    .eq('pdi_plan_id', pdiPlanId)
+
+  let pdiCompleted = false
+  let pdiStatusMessage = null
+
+  if (allItems && allItems.length > 0) {
+    const allItemsCompleted = allItems.every(item => item.status === 'completed')
+
+    if (allItemsCompleted) {
+      await supabase
+        .from('pdi_plans')
+        .update({
+          status: 'completed',
+          completion_date: new Date().toISOString()
+        })
+        .eq('id', pdiPlanId)
+      
+      pdiCompleted = true
+      pdiStatusMessage = 'PDI completo! Parabéns pela conclusão! 🎊'
+    }
+  }
+
+  revalidatePath('/', 'layout')
+  
+  return { 
+    success: true,
+    itemCompleted,
+    pdiCompleted,
+    message: pdiStatusMessage || itemStatusMessage
+  }
+}
+
 /**
  * Delete PDI action
  */

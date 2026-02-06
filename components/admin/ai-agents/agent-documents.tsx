@@ -23,7 +23,9 @@ type AgentDocumentsProps = {
   documents: AdminAgentDocument[]
 }
 
-const emptyDoc: AgentDocumentInput = {
+type AgentDocumentFormInput = Omit<AgentDocumentInput, "sourceUrl"> & { sourceUrl: string }
+
+const emptyDoc: AgentDocumentFormInput = {
   title: "",
   content: "",
   type: "document",
@@ -34,14 +36,14 @@ export function AgentDocuments({ agentId, documents }: AgentDocumentsProps) {
   const { toast } = useToast()
   const router = useRouter()
   const [loading, setLoading] = useState(false)
-  const [draft, setDraft] = useState<AgentDocumentInput>({ ...emptyDoc })
+  const [draft, setDraft] = useState<AgentDocumentFormInput>({ ...emptyDoc })
   const [editing, setEditing] = useState<AdminAgentDocument | null>(null)
 
   const handleCreate = async () => {
     setLoading(true)
     try {
       const result = await createAgentDocument(agentId, draft)
-      if (result?.error) {
+      if ("error" in result) {
         toast({ title: "Erro", description: result.error, variant: "destructive" })
       } else {
         toast({ title: "Documento adicionado", description: "O documento foi indexado com sucesso." })
@@ -58,7 +60,7 @@ export function AgentDocuments({ agentId, documents }: AgentDocumentsProps) {
     if (!confirmed) return
 
     const result = await deleteAgentDocument(agentId, docId)
-    if (result?.error) {
+    if ("error" in result) {
       toast({ title: "Erro", description: result.error, variant: "destructive" })
     } else {
       toast({ title: "Documento excluído", description: "Documento removido." })
@@ -73,10 +75,10 @@ export function AgentDocuments({ agentId, documents }: AgentDocumentsProps) {
       const result = await updateAgentDocument(agentId, editing.id, {
         title: editing.title,
         content: editing.content,
-        type: editing.type as any,
+        type: editing.type,
         sourceUrl: editing.source_url ?? "",
       })
-      if (result?.error) {
+      if ("error" in result) {
         toast({ title: "Erro", description: result.error, variant: "destructive" })
       } else {
         toast({ title: "Documento atualizado", description: "Documento reindexado com sucesso." })

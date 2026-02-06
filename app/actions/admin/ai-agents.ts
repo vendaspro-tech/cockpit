@@ -8,6 +8,8 @@ import { ensureSupabaseUser } from "@/lib/supabase/user"
 import { revalidatePath } from "next/cache"
 import { OpenAI } from "openai"
 
+const AgentDocumentTypeSchema = z.enum(["transcript", "pdi", "assessment", "document", "image_extracted"])
+
 const AgentSchema = z.object({
   name: z.string().min(2, "Nome obrigatório"),
   description: z.string().optional().nullable(),
@@ -20,11 +22,17 @@ const AgentSchema = z.object({
 const AgentDocumentSchema = z.object({
   title: z.string().min(2, "Título obrigatório"),
   content: z.string().min(10, "Conteúdo obrigatório"),
-  type: z.enum(["transcript", "pdi", "assessment", "document", "image_extracted"]).default("document"),
+  type: AgentDocumentTypeSchema.default("document"),
   sourceUrl: z.string().url().or(z.literal("")).optional().nullable(),
 })
 
+export type AgentDocumentType = z.infer<typeof AgentDocumentTypeSchema>
 export type AgentDocumentInput = z.infer<typeof AgentDocumentSchema>
+export type ActionError = { error: string }
+export type AgentCreateSuccess = { success: true; agent: AdminAgent }
+export type SimpleSuccess = { success: true }
+export type AgentCreateResult = ActionError | AgentCreateSuccess
+export type AgentActionResult = ActionError | SimpleSuccess
 
 export type AdminAgent = {
   id: string
@@ -43,21 +51,21 @@ export type AdminAgentDocument = {
   agent_id: string
   title: string
   content: string
-  type: string
+  type: AgentDocumentType
   source_url: string | null
   created_at: string
   updated_at: string
   metadata: Record<string, any>
 }
 
-async function requireSystemOwner() {
+async function requireSystemOwner(): Promise<ActionError | { userId: string }> {
   const user = await getAuthUser()
   if (!user) return { error: "Não autorizado" }
   const owner = await isSystemOwner(user.id)
   if (!owner) return { error: "Não autorizado" }
   const { userId, error } = await ensureSupabaseUser(user.id)
   if (error || !userId) return { error: "Não autorizado" }
-  return { user, userId }
+  return { userId }
 }
 
 export async function getAdminAgents(): Promise<AdminAgent[]> {
@@ -97,7 +105,7 @@ export async function getAdminAgentById(agentId: string): Promise<AdminAgent | n
   return data as AdminAgent
 }
 
-export async function createAgent(input: z.infer<typeof AgentSchema>) {
+export async function createAgent(input: z.infer<typeof AgentSchema>): Promise<AgentCreateResult> {
   const auth = await requireSystemOwner()
   if ("error" in auth) return auth
 
@@ -129,7 +137,7 @@ export async function createAgent(input: z.infer<typeof AgentSchema>) {
   return { success: true, agent: data as AdminAgent }
 }
 
-export async function updateAgent(agentId: string, input: z.infer<typeof AgentSchema>) {
+export async function updateAgent(agentId: string, input: z.infer<typeof AgentSchema>): Promise<AgentActionResult> {
   const auth = await requireSystemOwner()
   if ("error" in auth) return auth
 
@@ -161,7 +169,10 @@ export async function updateAgent(agentId: string, input: z.infer<typeof AgentSc
   return { success: true }
 }
 
-export async function setAgentStatus(agentId: string, status: "active" | "inactive") {
+export async function setAgentStatus(
+  agentId: string,
+  status: "active" | "inactive"
+): Promise<AgentActionResult> {
   const auth = await requireSystemOwner()
   if ("error" in auth) return auth
 
@@ -181,7 +192,7 @@ export async function setAgentStatus(agentId: string, status: "active" | "inacti
   return { success: true }
 }
 
-export async function deleteAgent(agentId: string) {
+export async function deleteAgent(agentId: string): Promise<AgentActionResult> {
   const auth = await requireSystemOwner()
   if ("error" in auth) return auth
 
@@ -216,7 +227,10 @@ export async function getAgentDocuments(agentId: string): Promise<AdminAgentDocu
   return (data ?? []) as AdminAgentDocument[]
 }
 
-export async function createAgentDocument(agentId: string, input: z.infer<typeof AgentDocumentSchema>) {
+export async function createAgentDocument(
+  agentId: string,
+  input: z.infer<typeof AgentDocumentSchema>
+): Promise<AgentActionResult> {
   const auth = await requireSystemOwner()
   if ("error" in auth) return auth
 
@@ -263,7 +277,7 @@ export async function updateAgentDocument(
   agentId: string,
   documentId: string,
   input: z.infer<typeof AgentDocumentSchema>
-) {
+): Promise<AgentActionResult> {
   const auth = await requireSystemOwner()
   if ("error" in auth) return auth
 
@@ -307,7 +321,7 @@ export async function updateAgentDocument(
   return { success: true }
 }
 
-export async function deleteAgentDocument(agentId: string, documentId: string) {
+export async function deleteAgentDocument(agentId: string, documentId: string): Promise<AgentActionResult> {
   const auth = await requireSystemOwner()
   if ("error" in auth) return auth
 

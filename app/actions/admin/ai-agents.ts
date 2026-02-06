@@ -24,6 +24,8 @@ const AgentDocumentSchema = z.object({
   sourceUrl: z.string().url().or(z.literal("")).optional().nullable(),
 })
 
+export type AgentDocumentInput = z.infer<typeof AgentDocumentSchema>
+
 export type AdminAgent = {
   id: string
   name: string

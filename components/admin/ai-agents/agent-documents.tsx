@@ -13,6 +13,7 @@ import {
   createAgentDocument,
   deleteAgentDocument,
   updateAgentDocument,
+  type AgentDocumentInput,
   type AdminAgentDocument,
 } from "@/app/actions/admin/ai-agents"
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
@@ -22,7 +23,7 @@ type AgentDocumentsProps = {
   documents: AdminAgentDocument[]
 }
 
-const emptyDoc = {
+const emptyDoc: AgentDocumentInput = {
   title: "",
   content: "",
   type: "document",
@@ -33,7 +34,7 @@ export function AgentDocuments({ agentId, documents }: AgentDocumentsProps) {
   const { toast } = useToast()
   const router = useRouter()
   const [loading, setLoading] = useState(false)
-  const [draft, setDraft] = useState({ ...emptyDoc })
+  const [draft, setDraft] = useState<AgentDocumentInput>({ ...emptyDoc })
   const [editing, setEditing] = useState<AdminAgentDocument | null>(null)
 
   const handleCreate = async () => {
@@ -109,7 +110,9 @@ export function AgentDocuments({ agentId, documents }: AgentDocumentsProps) {
             <Label>Tipo</Label>
             <Select
               value={draft.type}
-              onValueChange={(value) => setDraft({ ...draft, type: value })}
+              onValueChange={(value) =>
+                setDraft({ ...draft, type: value as AgentDocumentInput["type"] })
+              }
             >
               <SelectTrigger>
                 <SelectValue placeholder="Tipo" />
@@ -184,7 +187,9 @@ export function AgentDocuments({ agentId, documents }: AgentDocumentsProps) {
                           <Label>Tipo</Label>
                           <Select
                             value={editing.type}
-                            onValueChange={(value) => setEditing({ ...editing, type: value })}
+                            onValueChange={(value) =>
+                              setEditing({ ...editing, type: value as AgentDocumentInput["type"] })
+                            }
                           >
                             <SelectTrigger>
                               <SelectValue placeholder="Tipo" />

@@ -7,6 +7,7 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { Textarea } from "@/components/ui/textarea"
 import { Separator } from "@/components/ui/separator"
 import { useToast } from "@/hooks/use-toast"
+import { createClient } from "@/lib/supabase/client"
 import {
   deleteConversation,
   getConversationAttachments,
@@ -42,6 +43,17 @@ export function AgentChat({
   const [input, setInput] = useState("")
   const [loading, setLoading] = useState(false)
   const [attachments, setAttachments] = useState<ConversationAttachment[]>([])
+  const [pendingAttachments, setPendingAttachments] = useState<
+    Array<{
+      id: string
+      file: File
+      filename: string
+      mimeType: string
+      sizeBytes: number
+      status: "queued" | "uploading" | "error"
+      error?: string
+    }>
+  >([])
   const [uploading, setUploading] = useState(false)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
@@ -93,8 +105,9 @@ export function AgentChat({
   }
 
   const handleSend = async () => {
-    if (!input.trim()) return
-    const messageText = input.trim()
+    const hasPending = pendingAttachments.length > 0
+    if (!input.trim() && !hasPending) return
+    const messageText = input.trim() || (hasPending ? "Enviei um arquivo para análise." : "")
     const optimisticUser: ConversationMessage = {
       id: `${Date.now()}-user`,
       sender: "user",
@@ -104,16 +117,101 @@ export function AgentChat({
     }
 
     setInput("")
-    setMessages((prev) => [...prev, optimisticUser])
+    if (messageText) {
+      setMessages((prev) => [...prev, optimisticUser])
+    }
     setLoading(true)
     try {
+      let resolvedConversationId = selectedId
+
+      if (hasPending) {
+        setUploading(true)
+        const supabase = createClient()
+        const queued = [...pendingAttachments]
+        for (const pending of queued) {
+          setPendingAttachments((prev) =>
+            prev.map((att) =>
+              att.id === pending.id ? { ...att, status: "uploading", error: undefined } : att
+            )
+          )
+          const prepareResponse = await fetch("/api/ai/agents/attachments/prepare", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              agentId,
+              workspaceId,
+              conversationId: resolvedConversationId ?? undefined,
+              filename: pending.filename,
+              mimeType: pending.mimeType,
+              sizeBytes: pending.sizeBytes,
+            }),
+          })
+          const prepareResult = await prepareResponse.json()
+          if (!prepareResponse.ok) {
+            const errorMessage = prepareResult.error || "Falha ao preparar upload"
+            setPendingAttachments((prev) =>
+              prev.map((att) =>
+                att.id === pending.id ? { ...att, status: "error", error: errorMessage } : att
+              )
+            )
+            throw new Error(errorMessage)
+          }
+
+          resolvedConversationId = prepareResult.conversationId
+          if (!selectedId) setSelectedId(prepareResult.conversationId)
+
+          const uploadResult = await supabase.storage
+            .from(prepareResult.bucket)
+            .upload(prepareResult.storagePath, pending.file, {
+              contentType: pending.mimeType,
+              upsert: false,
+            })
+
+          if (uploadResult.error) {
+            const errorMessage = uploadResult.error.message || "Falha ao enviar arquivo"
+            setPendingAttachments((prev) =>
+              prev.map((att) =>
+                att.id === pending.id ? { ...att, status: "error", error: errorMessage } : att
+              )
+            )
+            throw new Error(errorMessage)
+          }
+
+          const commitResponse = await fetch("/api/ai/agents/attachments/commit", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              conversationId: resolvedConversationId,
+              storagePath: prepareResult.storagePath,
+              filename: pending.filename,
+              mimeType: pending.mimeType,
+              sizeBytes: pending.sizeBytes,
+            }),
+          })
+          const commitResult = await commitResponse.json()
+          if (!commitResponse.ok) {
+            const errorMessage = commitResult.error || "Falha ao salvar anexo"
+            setPendingAttachments((prev) =>
+              prev.map((att) =>
+                att.id === pending.id ? { ...att, status: "error", error: errorMessage } : att
+              )
+            )
+            throw new Error(errorMessage)
+          }
+
+          setAttachments((prev) => [commitResult.attachment, ...prev])
+          setPendingAttachments((prev) => prev.filter((att) => att.id !== pending.id))
+        }
+        setUploading(false)
+      }
+
       const response = await fetch("/api/ai/agents/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           agentId,
           workspaceId,
-          conversationId: selectedId ?? undefined,
+          conversationId: resolvedConversationId ?? undefined,
           message: messageText,
         }),
       })
@@ -134,7 +232,7 @@ export function AgentChat({
 
       setMessages((prev) => [...prev, assistantMessage])
 
-      if (!selectedId) {
+      if (!resolvedConversationId) {
         setSelectedId(result.conversationId)
         const files = await getConversationAttachments(result.conversationId)
         setAttachments(files)
@@ -145,6 +243,7 @@ export function AgentChat({
       toast({ title: "Erro", description: "Não foi possível enviar sua mensagem.", variant: "destructive" })
     } finally {
       setLoading(false)
+      setUploading(false)
     }
   }
 
@@ -156,36 +255,37 @@ export function AgentChat({
   const handleAttachmentUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
     if (!file) return
-    setUploading(true)
-    try {
-      const formData = new FormData()
-      formData.append("file", file)
-      formData.append("agentId", agentId)
-      formData.append("workspaceId", workspaceId)
-      if (selectedId) formData.append("conversationId", selectedId)
+    const allowedTypes = new Set(["text/plain", "text/csv", "application/pdf"])
+    const maxSizeBytes = 25 * 1024 * 1024
 
-      const response = await fetch("/api/ai/agents/attachments/upload", {
-        method: "POST",
-        body: formData,
-      })
-      const result = await response.json()
-      if (!response.ok) {
-        toast({ title: "Erro", description: result.error || "Falha ao enviar arquivo", variant: "destructive" })
-        return
-      }
-
-      if (!selectedId && result.conversationId) {
-        setSelectedId(result.conversationId)
-      }
-
-      setAttachments((prev) => [result.attachment, ...prev])
-      toast({ title: "Arquivo anexado", description: "Anexo disponível para esta conversa." })
-    } catch (error) {
-      toast({ title: "Erro", description: "Falha ao enviar arquivo.", variant: "destructive" })
-    } finally {
-      setUploading(false)
+    if (!allowedTypes.has(file.type)) {
+      toast({ title: "Arquivo inválido", description: "Tipo de arquivo não suportado.", variant: "destructive" })
       if (fileInputRef.current) fileInputRef.current.value = ""
+      return
     }
+
+    if (file.size > maxSizeBytes) {
+      toast({ title: "Arquivo muito grande", description: "Limite de 25MB.", variant: "destructive" })
+      if (fileInputRef.current) fileInputRef.current.value = ""
+      return
+    }
+
+    setPendingAttachments((prev) => [
+      ...prev,
+      {
+        id: `${Date.now()}-${file.name}`,
+        file,
+        filename: file.name,
+        mimeType: file.type,
+        sizeBytes: file.size,
+        status: "queued",
+      },
+    ])
+    if (fileInputRef.current) fileInputRef.current.value = ""
+  }
+
+  const handleRemovePending = (id: string) => {
+    setPendingAttachments((prev) => prev.filter((att) => att.id !== id))
   }
 
   return (
@@ -278,14 +378,33 @@ export function AgentChat({
               accept=".txt,.pdf,.csv"
               onChange={handleAttachmentUpload}
             />
-            {attachments.length > 0 && (
+            {(pendingAttachments.length > 0 || attachments.length > 0) && (
               <div className="flex flex-wrap gap-2">
+                {pendingAttachments.map((att) => (
+                  <span
+                    key={att.id}
+                    className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs ${
+                      att.status === "error"
+                        ? "bg-destructive/10 text-destructive"
+                        : "bg-muted text-muted-foreground"
+                    }`}
+                  >
+                    {att.filename} • {att.mimeType}
+                    <button
+                      type="button"
+                      className="text-xs hover:text-foreground"
+                      onClick={() => handleRemovePending(att.id)}
+                    >
+                      x
+                    </button>
+                  </span>
+                ))}
                 {attachments.map((att) => (
                   <span
                     key={att.id}
                     className="rounded-full bg-muted px-3 py-1 text-xs text-muted-foreground"
                   >
-                    {att.filename}
+                    {att.filename} • {att.mime_type}
                   </span>
                 ))}
               </div>
@@ -303,10 +422,10 @@ export function AgentChat({
               }}
             />
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <Button variant="outline" onClick={handleAttachmentClick} disabled={uploading}>
-                {uploading ? "Enviando..." : "Anexar arquivo"}
+              <Button variant="outline" onClick={handleAttachmentClick} disabled={uploading || loading}>
+                {uploading ? "Processando..." : "Anexar arquivo"}
               </Button>
-              <Button onClick={handleSend} disabled={loading || !input.trim()}>
+              <Button onClick={handleSend} disabled={loading || uploading || (!input.trim() && pendingAttachments.length === 0)}>
                 Enviar
               </Button>
             </div>

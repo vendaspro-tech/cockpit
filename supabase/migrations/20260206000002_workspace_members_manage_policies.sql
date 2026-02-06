@@ -13,7 +13,7 @@ CREATE POLICY workspace_members_update_manage_policy ON workspace_members
     OR EXISTS (
       SELECT 1
       FROM users u
-      WHERE (u.id = auth.uid() OR u.supabase_user_id = auth.uid())
+      WHERE (u.id = auth.uid() OR u.supabase_user_id = auth.uid()::text)
         AND u.is_super_admin = true
     )
   )
@@ -28,7 +28,7 @@ CREATE POLICY workspace_members_update_manage_policy ON workspace_members
     OR EXISTS (
       SELECT 1
       FROM users u
-      WHERE (u.id = auth.uid() OR u.supabase_user_id = auth.uid())
+      WHERE (u.id = auth.uid() OR u.supabase_user_id = auth.uid()::text)
         AND u.is_super_admin = true
     )
   );
@@ -47,7 +47,7 @@ CREATE POLICY workspace_members_delete_manage_policy ON workspace_members
     OR EXISTS (
       SELECT 1
       FROM users u
-      WHERE (u.id = auth.uid() OR u.supabase_user_id = auth.uid())
+      WHERE (u.id = auth.uid() OR u.supabase_user_id = auth.uid()::text)
         AND u.is_super_admin = true
     )
   );

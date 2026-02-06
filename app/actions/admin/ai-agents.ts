@@ -341,13 +341,22 @@ export async function getAgentConversationsAdmin(agentId: string) {
     return []
   }
 
-  return (data ?? []) as Array<{
+  type ConversationUser = { id: string; email: string | null; full_name: string | null }
+  type ConversationRow = {
     id: string
     title: string | null
     last_message_at: string | null
     created_at: string
-    user: { id: string; email: string | null; full_name: string | null } | null
-  }>
+    user: ConversationUser[] | ConversationUser | null
+  }
+
+  return (data ?? []).map((row: ConversationRow) => ({
+    id: row.id,
+    title: row.title,
+    last_message_at: row.last_message_at,
+    created_at: row.created_at,
+    user: Array.isArray(row.user) ? row.user[0] ?? null : row.user ?? null,
+  }))
 }
 
 export async function getConversationMessagesAdmin(conversationId: string) {

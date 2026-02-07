@@ -301,6 +301,31 @@ export async function updateExecutionActionStatus(actionId: string, status: Task
   return { success: true }
 }
 
+export async function updateExecutionAction(actionId: string, updates: Partial<CreateTaskInput>) {
+  const supabase = await createClient()
+
+  const payload: Record<string, string | null> = {}
+  if (typeof updates.title === "string") payload.title = updates.title
+  if (typeof updates.description === "string") payload.description = updates.description
+  if (typeof updates.priority === "string") payload.priority = updates.priority
+  if (typeof updates.due_date === "string") {
+    payload.due_date = updates.due_date ? updates.due_date.split("T")[0] : null
+  }
+  if (typeof updates.status === "string") payload.status = updates.status
+
+  const { error } = await supabase
+    .from('execution_actions')
+    .update(payload)
+    .eq('id', actionId)
+
+  if (error) {
+    return { error: 'Erro ao atualizar ação estratégica' }
+  }
+
+  revalidatePath('/tasks')
+  return { success: true }
+}
+
 /**
  * Duplicate a standalone task
  */

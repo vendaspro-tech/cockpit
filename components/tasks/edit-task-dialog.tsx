@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -20,19 +20,41 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { updateStandaloneTask } from "@/app/actions/tasks"
+import { updateExecutionAction, updateStandaloneTask } from "@/app/actions/tasks"
 import { updatePDIAction } from "@/app/actions/pdi-actions"
 import { UnifiedTask } from "@/lib/types/task"
 import { toast } from "sonner"
+import { format } from "date-fns"
+import { ptBR } from "date-fns/locale"
 
 interface EditTaskDialogProps {
   task: UnifiedTask
   open: boolean
   onOpenChange: (open: boolean) => void
+  startInEdit?: boolean
 }
 
-export function EditTaskDialog({ task, open, onOpenChange }: EditTaskDialogProps) {
+export function EditTaskDialog({ task, open, onOpenChange, startInEdit = false }: EditTaskDialogProps) {
   const [loading, setLoading] = useState(false)
+  const [isEditing, setIsEditing] = useState(startInEdit)
+
+  useEffect(() => {
+    if (open) {
+      setIsEditing(startInEdit)
+    }
+  }, [open, startInEdit, task.id])
+
+  const statusLabel: Record<UnifiedTask["status"], string> = {
+    todo: "A Fazer",
+    in_progress: "Em Progresso",
+    done: "Concluido",
+  }
+
+  const priorityLabel: Record<"P1" | "P2" | "P3", string> = {
+    P1: "Alta",
+    P2: "Media",
+    P3: "Baixa",
+  }
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
@@ -53,20 +75,22 @@ export function EditTaskDialog({ task, open, onOpenChange }: EditTaskDialogProps
           due_date: dueDate ? new Date(dueDate).toISOString() : undefined,
         })
         if (result.error) throw new Error(result.error)
-      } else {
+      } else if (task.type === "pdi_action") {
         // For PDI actions, we update using pdi-actions server action
-        // Note: PDI actions might not support all fields the same way, but we added priority
         const result = await updatePDIAction(task.id, title, undefined, priority)
-        // Note: updatePDIAction signature might need check. 
-        // It is: (actionId, description, deadlineDays?, priority?)
-        // We are passing title as description.
-        // We are NOT updating due_date here for PDI yet in that specific action?
-        // Let's check updatePDIAction signature in pdi-actions.ts
+        if (result.error) throw new Error(result.error)
+      } else {
+        const result = await updateExecutionAction(task.id, {
+          title,
+          description,
+          priority: priority || undefined,
+          due_date: dueDate ? new Date(dueDate).toISOString() : undefined,
+        })
         if (result.error) throw new Error(result.error)
       }
 
       toast.success('Tarefa atualizada com sucesso!')
-      onOpenChange(false)
+      setIsEditing(false)
     } catch (error: any) {
       toast.error(error.message || 'Erro ao atualizar tarefa')
     } finally {
@@ -78,73 +102,110 @@ export function EditTaskDialog({ task, open, onOpenChange }: EditTaskDialogProps
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
-          <DialogTitle>Editar Tarefa</DialogTitle>
+          <DialogTitle>{isEditing ? "Editar Tarefa" : "Detalhes da Tarefa"}</DialogTitle>
           <DialogDescription>
-            Faça alterações na sua tarefa aqui.
+            {isEditing ? "Faça alterações na sua tarefa." : "Visualize os dados da tarefa."}
           </DialogDescription>
         </DialogHeader>
-        <form onSubmit={handleSubmit}>
-          <div className="grid gap-4 py-4">
-            <div className="grid gap-2">
-              <Label htmlFor="title">Título</Label>
-              <Input 
-                id="title" 
-                name="title" 
-                required 
-                defaultValue={task.title} 
-                placeholder="Ex: Preparar apresentação" 
-              />
-            </div>
-            
-            {task.type === 'standalone_task' && (
+        {isEditing ? (
+          <form onSubmit={handleSubmit}>
+            <div className="grid gap-4 py-4">
               <div className="grid gap-2">
-                <Label htmlFor="description">Descrição</Label>
-                <Textarea 
-                  id="description" 
-                  name="description" 
-                  defaultValue={task.description || ''} 
-                  placeholder="Detalhes da tarefa..." 
+                <Label htmlFor="title">Nome</Label>
+                <Input 
+                  id="title" 
+                  name="title" 
+                  required 
+                  defaultValue={task.title} 
+                  placeholder="Ex: Preparar apresentação" 
                 />
               </div>
-            )}
-
-            <div className="grid grid-cols-2 gap-4">
-              <div className="grid gap-2">
-                <Label htmlFor="priority">Prioridade</Label>
-                <Select name="priority" defaultValue={task.priority || undefined}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecione" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="P1">P1 - Alta (Vermelho)</SelectItem>
-                    <SelectItem value="P2">P2 - Média (Amarelo)</SelectItem>
-                    <SelectItem value="P3">P3 - Baixa (Azul)</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
               
-              {task.type === 'standalone_task' && (
+              {task.type !== 'pdi_action' && (
                 <div className="grid gap-2">
-                  <Label htmlFor="due_date">Data de Entrega</Label>
-                  <Input 
-                    id="due_date" 
-                    name="due_date" 
-                    type="date" 
-                    defaultValue={task.due_date ? new Date(task.due_date).toISOString().split('T')[0] : ''}
+                  <Label htmlFor="description">Descricao</Label>
+                  <Textarea 
+                    id="description" 
+                    name="description" 
+                    defaultValue={task.description || ''} 
+                    placeholder="Detalhes da tarefa..." 
                   />
                 </div>
               )}
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="grid gap-2">
+                  <Label htmlFor="priority">Prioridade</Label>
+                  <Select name="priority" defaultValue={task.priority || undefined}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="P1">P1 - Alta (Vermelho)</SelectItem>
+                      <SelectItem value="P2">P2 - Media (Amarelo)</SelectItem>
+                      <SelectItem value="P3">P3 - Baixa (Azul)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                
+                {task.type !== 'pdi_action' && (
+                  <div className="grid gap-2">
+                    <Label htmlFor="due_date">Data</Label>
+                    <Input 
+                      id="due_date" 
+                      name="due_date" 
+                      type="date" 
+                      defaultValue={task.due_date ? new Date(task.due_date).toISOString().split('T')[0] : ''}
+                    />
+                  </div>
+                )}
+              </div>
             </div>
-          </div>
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-              Cancelar
-            </Button>
-            <Button type="submit" disabled={loading}>
-              {loading ? 'Salvando...' : 'Salvar Alterações'}
-            </Button>
-          </DialogFooter>
-        </form>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setIsEditing(false)}>
+                Voltar
+              </Button>
+              <Button type="submit" disabled={loading}>
+                {loading ? 'Salvando...' : 'Salvar Alteracoes'}
+              </Button>
+            </DialogFooter>
+          </form>
+        ) : (
+          <>
+            <div className="grid gap-4 py-4 text-sm">
+              <div className="grid gap-1">
+                <Label>Nome</Label>
+                <p>{task.title}</p>
+              </div>
+              <div className="grid gap-1">
+                <Label>Descricao</Label>
+                <p className="text-muted-foreground">{task.description || "-"}</p>
+              </div>
+              <div className="grid gap-1">
+                <Label>Data</Label>
+                <p className="text-muted-foreground">
+                  {task.due_date ? format(new Date(task.due_date), "dd/MM/yyyy", { locale: ptBR }) : "-"}
+                </p>
+              </div>
+              <div className="grid gap-1">
+                <Label>Prioridade</Label>
+                <p className="text-muted-foreground">{task.priority ? priorityLabel[task.priority] : "-"}</p>
+              </div>
+              <div className="grid gap-1">
+                <Label>Status</Label>
+                <p className="text-muted-foreground">{statusLabel[task.status]}</p>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+                Fechar
+              </Button>
+              <Button type="button" onClick={() => setIsEditing(true)}>
+                Editar tarefa
+              </Button>
+            </DialogFooter>
+          </>
+        )}
       </DialogContent>
     </Dialog>
   )

@@ -30,7 +30,8 @@ export function TaskKanbanView({ tasks }: TaskKanbanViewProps) {
   const [showPDI, setShowPDI] = useState(true)
   const [showStandalone, setShowStandalone] = useState(true)
   const [showCompleted, setShowCompleted] = useState(true)
-  const [editingTask, setEditingTask] = useState<UnifiedTask | null>(null)
+  const [activeTask, setActiveTask] = useState<UnifiedTask | null>(null)
+  const [startInEdit, setStartInEdit] = useState(false)
   const [draggingTaskId, setDraggingTaskId] = useState<string | null>(null)
   const [dragOverColumn, setDragOverColumn] = useState<string | null>(null)
 
@@ -128,6 +129,11 @@ export function TaskKanbanView({ tasks }: TaskKanbanViewProps) {
     }
   }
 
+  const openTaskDialog = (task: UnifiedTask, edit = false) => {
+    setActiveTask(task)
+    setStartInEdit(edit)
+  }
+
   const columns = [
     { id: 'todo', title: 'A Fazer', color: 'bg-muted text-muted-foreground' },
     { id: 'in_progress', title: 'Em Progresso', color: 'bg-blue-500/10 text-blue-600 dark:text-blue-400' },
@@ -184,6 +190,7 @@ export function TaskKanbanView({ tasks }: TaskKanbanViewProps) {
                   draggable
                   onDragStart={(event) => handleDragStart(event, task)}
                   onDragEnd={handleDragEnd}
+                  onClick={() => openTaskDialog(task)}
                 >
                   <div className="flex items-start justify-between gap-2 mb-2">
                     <span className={cn(
@@ -197,7 +204,12 @@ export function TaskKanbanView({ tasks }: TaskKanbanViewProps) {
                     
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-6 w-6 -mr-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6 -mr-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                          onClick={(event) => event.stopPropagation()}
+                        >
                           <MoreHorizontal className="w-4 h-4" />
                         </Button>
                       </DropdownMenuTrigger>
@@ -211,7 +223,7 @@ export function TaskKanbanView({ tasks }: TaskKanbanViewProps) {
                         <DropdownMenuItem onClick={() => handleStatusChange(task, 'done')}>
                           Mover para Concluído
                         </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => setEditingTask(task)}>
+                        <DropdownMenuItem onClick={() => openTaskDialog(task, true)}>
                           <Pencil className="mr-2 h-4 w-4" />
                           Editar
                         </DropdownMenuItem>
@@ -258,11 +270,12 @@ export function TaskKanbanView({ tasks }: TaskKanbanViewProps) {
         ))}
       </div>
 
-      {editingTask && (
+      {activeTask && (
         <EditTaskDialog 
-          task={editingTask} 
-          open={!!editingTask} 
-          onOpenChange={(open) => !open && setEditingTask(null)} 
+          task={activeTask} 
+          open={!!activeTask} 
+          startInEdit={startInEdit}
+          onOpenChange={(open) => !open && setActiveTask(null)} 
         />
       )}
     </div>

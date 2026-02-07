@@ -6,8 +6,8 @@ import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
 import { CheckCircle2, Clock, MoreHorizontal } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { updateStandaloneTask } from "@/app/actions/tasks"
-import { togglePDIActionComplete } from "@/app/actions/pdi"
+import { updateExecutionActionStatus, updateStandaloneTask } from "@/app/actions/tasks"
+import { updatePDIActionStatus } from "@/app/actions/pdi"
 import { toast } from "sonner"
 import { useState } from "react"
 import {
@@ -39,7 +39,8 @@ export function TaskListView({ tasks }: TaskListViewProps) {
   const [showPDI, setShowPDI] = useState(true)
   const [showStandalone, setShowStandalone] = useState(true)
   const [showCompleted, setShowCompleted] = useState(true)
-  const [editingTask, setEditingTask] = useState<UnifiedTask | null>(null)
+  const [activeTask, setActiveTask] = useState<UnifiedTask | null>(null)
+  const [startInEdit, setStartInEdit] = useState(false)
 
   const filteredTasks = optimisticTasks.filter(task => {
     if (!showPDI && task.type === 'pdi_action') return false
@@ -58,9 +59,15 @@ export function TaskListView({ tasks }: TaskListViewProps) {
 
     try {
       if (task.type === 'standalone_task') {
-        await updateStandaloneTask(task.id, { status: newStatus })
+        const result = await updateStandaloneTask(task.id, { status: newStatus })
+        if (result?.error) throw new Error(result.error)
+      } else if (task.type === 'pdi_action') {
+        const pdiStatus = newStatus === 'todo' ? 'pending' : newStatus === 'in_progress' ? 'in_progress' : 'done'
+        const result = await updatePDIActionStatus(task.id, pdiStatus)
+        if (result?.error) throw new Error(result.error)
       } else {
-        await togglePDIActionComplete(task.id, newStatus === 'done')
+        const result = await updateExecutionActionStatus(task.id, newStatus)
+        if (result?.error) throw new Error(result.error)
       }
       toast.success('Status atualizado')
     } catch (error) {
@@ -70,6 +77,11 @@ export function TaskListView({ tasks }: TaskListViewProps) {
       ))
       toast.error('Erro ao atualizar status')
     }
+  }
+
+  const openTaskDialog = (task: UnifiedTask, edit = false) => {
+    setActiveTask(task)
+    setStartInEdit(edit)
   }
 
   const handleDuplicate = async (task: UnifiedTask) => {
@@ -156,10 +168,13 @@ export function TaskListView({ tasks }: TaskListViewProps) {
               </TableRow>
             ) : (
               filteredTasks.map((task) => (
-                <TableRow key={task.id} className="group">
+                <TableRow key={task.id} className="group cursor-pointer" onClick={() => openTaskDialog(task)}>
                   <TableCell>
                     <button 
-                      onClick={() => handleToggleStatus(task)}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        handleToggleStatus(task)
+                      }}
                       className={cn(
                         "flex h-5 w-5 items-center justify-center rounded-full border transition-colors",
                         task.status === 'done' 
@@ -218,7 +233,12 @@ export function TaskListView({ tasks }: TaskListViewProps) {
                   <TableCell>
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity"
+                          onClick={(e) => e.stopPropagation()}
+                        >
                           <MoreHorizontal className="w-4 h-4" />
                         </Button>
                       </DropdownMenuTrigger>
@@ -226,7 +246,7 @@ export function TaskListView({ tasks }: TaskListViewProps) {
                         <DropdownMenuItem onClick={() => handleToggleStatus(task)}>
                           {task.status === 'done' ? 'Marcar como não concluído' : 'Marcar como concluído'}
                         </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => setEditingTask(task)}>
+                        <DropdownMenuItem onClick={() => openTaskDialog(task, true)}>
                           <Pencil className="mr-2 h-4 w-4" />
                           Editar
                         </DropdownMenuItem>
@@ -252,11 +272,12 @@ export function TaskListView({ tasks }: TaskListViewProps) {
         </Table>
       </div>
 
-      {editingTask && (
+      {activeTask && (
         <EditTaskDialog 
-          task={editingTask} 
-          open={!!editingTask} 
-          onOpenChange={(open) => !open && setEditingTask(null)} 
+          task={activeTask} 
+          open={!!activeTask} 
+          startInEdit={startInEdit}
+          onOpenChange={(open) => !open && setActiveTask(null)} 
         />
       )}
     </div>

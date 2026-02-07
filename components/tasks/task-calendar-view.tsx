@@ -7,6 +7,7 @@ import { ptBR } from 'date-fns/locale'
 import 'react-big-calendar/lib/css/react-big-calendar.css'
 import { useState } from "react"
 import { cn } from "@/lib/utils"
+import { EditTaskDialog } from "./edit-task-dialog"
 
 const locales = {
   'pt-BR': ptBR,
@@ -31,6 +32,7 @@ import { CalendarToolbar } from "@/components/shared"
 export function TaskCalendarView({ tasks }: TaskCalendarViewProps) {
   const [view, setView] = useState<any>(Views.MONTH)
   const [date, setDate] = useState(new Date())
+  const [activeTask, setActiveTask] = useState<UnifiedTask | null>(null)
 
   const events = tasks
     .filter(task => task.due_date)
@@ -188,6 +190,7 @@ export function TaskCalendarView({ tasks }: TaskCalendarViewProps) {
         date={date} // Controlled date
         onNavigate={setDate}
         eventPropGetter={eventStyleGetter}
+        onSelectEvent={(event) => setActiveTask(event.resource as UnifiedTask)}
         components={{
           toolbar: CalendarToolbar,
         }}
@@ -205,6 +208,13 @@ export function TaskCalendarView({ tasks }: TaskCalendarViewProps) {
           noEventsInRange: "Não há tarefas neste período."
         }}
       />
+      {activeTask && (
+        <EditTaskDialog
+          task={activeTask}
+          open={!!activeTask}
+          onOpenChange={(open) => !open && setActiveTask(null)}
+        />
+      )}
     </div>
   )
 }

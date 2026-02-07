@@ -62,7 +62,7 @@ export function TaskListView({ tasks }: TaskListViewProps) {
         const result = await updateStandaloneTask(task.id, { status: newStatus })
         if (result?.error) throw new Error(result.error)
       } else if (task.type === 'pdi_action') {
-        const pdiStatus = newStatus === 'todo' ? 'pending' : newStatus === 'in_progress' ? 'in_progress' : 'done'
+        const pdiStatus = newStatus === 'done' ? 'done' : 'pending'
         const result = await updatePDIActionStatus(task.id, pdiStatus)
         if (result?.error) throw new Error(result.error)
       } else {

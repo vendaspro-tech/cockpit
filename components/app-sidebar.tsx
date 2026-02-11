@@ -150,6 +150,16 @@ export function AppSidebar({ workspaceId, workspaceName, logoUrl, role, workspac
                 </a>
               </SidebarMenuButton>
             </SidebarMenuItem>
+            {showSupportEntry ? (
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild isActive={pathname.includes('/support')}>
+                  <a href={`/${workspaceId}/support`}>
+                    <LifeBuoy />
+                    <span>Suporte</span>
+                  </a>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            ) : null}
           </SidebarMenu>
         </SidebarGroup>
 

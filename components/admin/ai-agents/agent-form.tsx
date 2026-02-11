@@ -62,15 +62,15 @@ export function AgentForm({ mode, agentId, initial }: AgentFormProps) {
     try {
       if (mode === "create") {
         const result = await createAgent(form)
-        if (result?.error) {
+        if (result && "error" in result) {
           toast({ title: "Erro", description: result.error, variant: "destructive" })
-        } else if (result?.agent?.id) {
+        } else if (result && "agent" in result && result.agent?.id) {
           toast({ title: "Agente criado", description: "Agente criado com sucesso." })
           router.push(`/admin/agents/${result.agent.id}`)
         }
       } else if (agentId) {
         const result = await updateAgent(agentId, form)
-        if (result?.error) {
+        if (result && "error" in result) {
           toast({ title: "Erro", description: result.error, variant: "destructive" })
         } else {
           toast({ title: "Agente atualizado", description: "Alterações salvas com sucesso." })
@@ -89,7 +89,7 @@ export function AgentForm({ mode, agentId, initial }: AgentFormProps) {
     setLoading(true)
     try {
       const result = await deleteAgent(agentId)
-      if (result?.error) {
+      if (result && "error" in result) {
         toast({ title: "Erro", description: result.error, variant: "destructive" })
       } else {
         toast({ title: "Agente excluído", description: "Agente removido com sucesso." })

@@ -150,16 +150,6 @@ export function AppSidebar({ workspaceId, workspaceName, logoUrl, role, workspac
                 </a>
               </SidebarMenuButton>
             </SidebarMenuItem>
-            {showSupportEntry ? (
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild isActive={pathname.includes('/support')}>
-                  <a href={`/${workspaceId}/support`}>
-                    <LifeBuoy />
-                    <span>Suporte</span>
-                  </a>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            ) : null}
           </SidebarMenu>
         </SidebarGroup>
 
@@ -380,45 +370,43 @@ export function AppSidebar({ workspaceId, workspaceName, logoUrl, role, workspac
           </>
         )}
 
-
-
-        <SidebarGroup className="mt-auto">
-          <SidebarSeparator className="mb-2" />
-          <SidebarContent>
-            <SidebarMenu className="flex flex-row items-center justify-between gap-1 px-2 py-2">
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild tooltip="Configurações">
-                  <a href={`/${workspaceId}/settings`} suppressHydrationWarning>
-                    <Settings className="h-5 w-5" />
-                    <span className="sr-only">Configurações</span>
-                  </a>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-              <SidebarMenuItem>
-                 <ModeToggle />
-              </SidebarMenuItem>
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild tooltip="Convidar Membros">
-                  <a href={`/${workspaceId}/settings?tab=users`} suppressHydrationWarning>
-                    <UserPlus className="h-5 w-5" />
-                    <span className="sr-only">Convidar</span>
-                  </a>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-              {showSupportEntry ? (
-                <SidebarMenuItem>
-                  <SidebarMenuButton asChild tooltip="Suporte">
-                    <a href={`/${workspaceId}/support`} suppressHydrationWarning>
-                      <LifeBuoy className="h-5 w-5" />
-                      <span className="sr-only">Suporte</span>
-                    </a>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ) : null}
-            </SidebarMenu>
-          </SidebarContent>
-        </SidebarGroup>
       </SidebarContent>
+      <SidebarFooter>
+        {showSupportEntry ? (
+          <SidebarMenu className="px-2 pb-2">
+            <SidebarMenuItem>
+              <SidebarMenuButton asChild isActive={pathname.includes('/support')}>
+                <a href={`/${workspaceId}/support`}>
+                  <LifeBuoy />
+                  <span>Suporte</span>
+                </a>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          </SidebarMenu>
+        ) : null}
+        <SidebarSeparator className="mb-2" />
+        <SidebarMenu className="flex flex-row items-center justify-between gap-1 px-2 py-2">
+          <SidebarMenuItem>
+            <SidebarMenuButton asChild tooltip="Configurações">
+              <a href={`/${workspaceId}/settings`} suppressHydrationWarning>
+                <Settings className="h-5 w-5" />
+                <span className="sr-only">Configurações</span>
+              </a>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+          <SidebarMenuItem>
+             <ModeToggle />
+          </SidebarMenuItem>
+          <SidebarMenuItem>
+            <SidebarMenuButton asChild tooltip="Convidar Membros">
+              <a href={`/${workspaceId}/settings?tab=users`} suppressHydrationWarning>
+                <UserPlus className="h-5 w-5" />
+                <span className="sr-only">Convidar</span>
+              </a>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        </SidebarMenu>
+      </SidebarFooter>
     </Sidebar>
   )
 }

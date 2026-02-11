@@ -15,6 +15,8 @@ import {
 import { DashboardBreadcrumb } from "@/components/dashboard-breadcrumb"
 import { getAuthUser } from "@/lib/auth-server"
 import { getUserRole } from "@/lib/auth-utils"
+import { getPlatformFeedbackPromptState } from "@/app/actions/platform-feedback"
+import { PlatformFeedbackDialog } from "@/components/shared/platform-feedback-dialog"
 
 interface DashboardLayoutProps {
   children: React.ReactNode
@@ -62,9 +64,10 @@ export default async function DashboardLayout({
     redirect('/') // User not a member of this workspace
   }
 
-  const [workspaces, alerts] = await Promise.all([
+  const [workspaces, alerts, feedbackPromptState] = await Promise.all([
     getUserWorkspaces(),
-    getActiveSystemAlerts(workspaceId)
+    getActiveSystemAlerts(workspaceId),
+    getPlatformFeedbackPromptState()
   ])
 
   // Get current path for breadcrumb
@@ -116,6 +119,7 @@ export default async function DashboardLayout({
         <main className="flex-1 overflow-y-auto px-6 pb-6 pt-5">
           {children}
         </main>
+        <PlatformFeedbackDialog initialOpen={feedbackPromptState.shouldShow} />
       </SidebarInset>
     </SidebarProvider>
   )

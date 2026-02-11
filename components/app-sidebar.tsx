@@ -138,7 +138,7 @@ export function AppSidebar({ workspaceId, workspaceName, logoUrl, role: _role, w
               <SidebarMenuButton asChild isActive={pathname.includes('/agents')}>
                 <a href={`/${workspaceId}/agents`}>
                   <Bot />
-                  <span>Agentes IA</span>
+                  <span>Biblioteca de Agentes</span>
                 </a>
               </SidebarMenuButton>
             </SidebarMenuItem>

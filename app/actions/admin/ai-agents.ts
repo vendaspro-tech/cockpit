@@ -14,6 +14,8 @@ const AgentSchema = z.object({
   systemPrompt: z.string().min(10, "System prompt obrigatório"),
   model: z.string().min(2).default("gpt-4o-mini"),
   temperature: z.number().min(0).max(1).default(0.7),
+  productTags: z.array(z.string()).default([]),
+  categoryTags: z.array(z.string()).default([]),
   status: z.enum(["active", "inactive"]).default("active"),
 })
 
@@ -31,6 +33,8 @@ export type AdminAgent = {
   system_prompt: string
   model: string
   temperature: number
+  product_tags: string[]
+  category_tags: string[]
   status: "active" | "inactive"
   created_at: string
   updated_at: string
@@ -43,9 +47,27 @@ export type AdminAgentDocument = {
   content: string
   type: string
   source_url: string | null
+  filename: string | null
+  mime_type: string | null
+  size_bytes: number | null
+  storage_path: string | null
   created_at: string
   updated_at: string
   metadata: Record<string, any>
+}
+
+function normalizeTags(tags: string[]) {
+  const seen = new Set<string>()
+  const normalized: string[] = []
+  for (const rawTag of tags) {
+    const tag = rawTag.trim().replace(/\s+/g, " ")
+    if (!tag) continue
+    const key = tag.toLowerCase()
+    if (seen.has(key)) continue
+    seen.add(key)
+    normalized.push(tag)
+  }
+  return normalized
 }
 
 async function requireSystemOwner() {
@@ -111,6 +133,8 @@ export async function createAgent(input: z.infer<typeof AgentSchema>) {
       system_prompt: parsed.data.systemPrompt,
       model: parsed.data.model,
       temperature: parsed.data.temperature,
+      product_tags: normalizeTags(parsed.data.productTags),
+      category_tags: normalizeTags(parsed.data.categoryTags),
       status: parsed.data.status,
       created_by: auth.userId,
       updated_by: auth.userId,
@@ -143,6 +167,8 @@ export async function updateAgent(agentId: string, input: z.infer<typeof AgentSc
       system_prompt: parsed.data.systemPrompt,
       model: parsed.data.model,
       temperature: parsed.data.temperature,
+      product_tags: normalizeTags(parsed.data.productTags),
+      category_tags: normalizeTags(parsed.data.categoryTags),
       status: parsed.data.status,
       updated_by: auth.userId,
       updated_at: new Date().toISOString(),
@@ -310,6 +336,13 @@ export async function deleteAgentDocument(agentId: string, documentId: string) {
   if ("error" in auth) return auth
 
   const supabase = createAdminClient()
+  const { data: existing } = await supabase
+    .from("ai_agent_knowledge_base")
+    .select("storage_path")
+    .eq("id", documentId)
+    .eq("agent_id", agentId)
+    .maybeSingle()
+
   const { error } = await supabase
     .from("ai_agent_knowledge_base")
     .delete()
@@ -319,6 +352,12 @@ export async function deleteAgentDocument(agentId: string, documentId: string) {
   if (error) {
     console.error("Error deleting agent doc:", error)
     return { error: "Erro ao excluir documento" }
+  }
+
+  if (existing?.storage_path) {
+    await supabase.storage
+      .from("ai-agent-kb-files")
+      .remove([existing.storage_path])
   }
 
   revalidatePath(`/admin/agents/${agentId}`)

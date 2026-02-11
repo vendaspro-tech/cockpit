@@ -8,6 +8,7 @@ import {
   FileText,
   Shield,
   BarChart,
+  MessageSquare,
   Command,
   Bell,
   Bot,
@@ -65,7 +66,8 @@ export function AdminSidebar({ className, ...props }: React.ComponentProps<typeo
       pathname.includes('/admin/subscriptions') ||
       pathname.includes('/admin/users') ||
       pathname.includes('/admin/plans') ||
-      pathname.includes('/admin/avaliacoes-pdis')
+      pathname.includes('/admin/avaliacoes-pdis') ||
+      pathname.includes('/admin/feedback')
     ) return 'gestao'
     if (pathname.includes('/admin/comercial-pro')) return 'comercialpro'
     if (pathname.includes('/admin/kpis') || pathname.includes('/admin/roles') || pathname.includes('/admin/scoring-rules') || pathname.includes('/admin/job-titles') || pathname.includes('/admin/competency-frameworks') || pathname.includes('/admin/test-structures')) return 'config'
@@ -148,6 +150,14 @@ export function AdminSidebar({ className, ...props }: React.ComponentProps<typeo
                     <Link href="/admin/avaliacoes-pdis">
                       <Target />
                       <span>Avaliações e PDIs</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+                <SidebarMenuItem>
+                  <SidebarMenuButton asChild isActive={pathname.includes('/admin/feedback')}>
+                    <Link href="/admin/feedback">
+                      <MessageSquare />
+                      <span>Feedback da Plataforma</span>
                     </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItem>

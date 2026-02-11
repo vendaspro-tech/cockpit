@@ -3,6 +3,7 @@
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
+import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -16,6 +17,7 @@ import {
   type AdminAgentDocument,
 } from "@/app/actions/admin/ai-agents"
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import { Upload } from "lucide-react"
 
 type AgentDocumentsProps = {
   agentId: string
@@ -33,6 +35,7 @@ export function AgentDocuments({ agentId, documents }: AgentDocumentsProps) {
   const { toast } = useToast()
   const router = useRouter()
   const [loading, setLoading] = useState(false)
+  const [uploading, setUploading] = useState(false)
   const [draft, setDraft] = useState({ ...emptyDoc })
   const [editing, setEditing] = useState<AdminAgentDocument | null>(null)
 
@@ -62,6 +65,57 @@ export function AgentDocuments({ agentId, documents }: AgentDocumentsProps) {
     } else {
       toast({ title: "Documento excluído", description: "Documento removido." })
       router.refresh()
+    }
+  }
+
+  const handleUploadFile = async (file: File | null) => {
+    if (!file) return
+    setUploading(true)
+    try {
+      const formData = new FormData()
+      formData.append("agentId", agentId)
+      formData.append("file", file)
+      const response = await fetch("/api/ai/agents/kb/upload", {
+        method: "POST",
+        body: formData,
+      })
+      const result = await response.json()
+      if (!response.ok) {
+        toast({ title: "Erro", description: result.error || "Falha no upload", variant: "destructive" })
+        return
+      }
+      toast({ title: "Upload concluído", description: "Documento indexado com sucesso." })
+      router.refresh()
+    } catch (error) {
+      toast({ title: "Erro", description: "Falha ao enviar arquivo.", variant: "destructive" })
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  const handleReplaceFile = async (doc: AdminAgentDocument, file: File | null) => {
+    if (!file) return
+    setUploading(true)
+    try {
+      const formData = new FormData()
+      formData.append("agentId", agentId)
+      formData.append("documentId", doc.id)
+      formData.append("file", file)
+      const response = await fetch("/api/ai/agents/kb/update-file", {
+        method: "POST",
+        body: formData,
+      })
+      const result = await response.json()
+      if (!response.ok) {
+        toast({ title: "Erro", description: result.error || "Falha ao substituir arquivo", variant: "destructive" })
+        return
+      }
+      toast({ title: "Arquivo substituído", description: "Documento atualizado e reindexado." })
+      router.refresh()
+    } catch (error) {
+      toast({ title: "Erro", description: "Falha ao substituir arquivo.", variant: "destructive" })
+    } finally {
+      setUploading(false)
     }
   }
 
@@ -96,6 +150,29 @@ export function AgentDocuments({ agentId, documents }: AgentDocumentsProps) {
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-8">
+        <div className="space-y-3 rounded-lg border p-4">
+          <div>
+            <h4 className="font-medium">Upload de Arquivos (PDF, TXT, CSV)</h4>
+            <p className="text-xs text-muted-foreground">Limite de 25MB por arquivo.</p>
+          </div>
+          <Label htmlFor="kb-file-upload" className="w-fit cursor-pointer">
+            <span className="sr-only">Selecionar arquivo</span>
+            <Button asChild variant="outline" disabled={uploading}>
+              <span>
+                <Upload className="h-4 w-4" />
+                {uploading ? "Enviando..." : "Enviar arquivo"}
+              </span>
+            </Button>
+          </Label>
+          <Input
+            id="kb-file-upload"
+            type="file"
+            className="hidden"
+            accept=".pdf,.txt,.csv"
+            onChange={(e) => handleUploadFile(e.target.files?.[0] || null)}
+          />
+        </div>
+
         <div className="grid gap-4 md:grid-cols-2">
           <div className="space-y-2">
             <Label>Título</Label>
@@ -159,11 +236,36 @@ export function AgentDocuments({ agentId, documents }: AgentDocumentsProps) {
                 <p className="text-xs text-muted-foreground">
                   {doc.type} • {doc.metadata?.content_length || doc.content.length} caracteres
                 </p>
+                <div className="flex flex-wrap gap-1">
+                  <Badge variant={doc.filename ? "secondary" : "outline"}>
+                    {doc.filename ? "Arquivo" : "Manual"}
+                  </Badge>
+                  {doc.filename && <Badge variant="outline">{doc.filename}</Badge>}
+                  {doc.size_bytes ? (
+                    <Badge variant="outline">{Math.ceil(doc.size_bytes / 1024)} KB</Badge>
+                  ) : null}
+                </div>
               </div>
               <div className="flex gap-2">
+                {doc.filename && (
+                  <>
+                    <Label htmlFor={`replace-${doc.id}`} className="w-fit cursor-pointer">
+                      <Button asChild variant="outline" size="sm" disabled={uploading}>
+                        <span>Substituir arquivo</span>
+                      </Button>
+                    </Label>
+                    <Input
+                      id={`replace-${doc.id}`}
+                      type="file"
+                      className="hidden"
+                      accept=".pdf,.txt,.csv"
+                      onChange={(e) => handleReplaceFile(doc, e.target.files?.[0] || null)}
+                    />
+                  </>
+                )}
                 <Dialog>
                   <DialogTrigger asChild>
-                    <Button variant="outline" size="sm" onClick={() => setEditing(doc)}>
+                    <Button variant="outline" size="sm" onClick={() => setEditing(doc)} disabled={!!doc.filename}>
                       Editar
                     </Button>
                   </DialogTrigger>

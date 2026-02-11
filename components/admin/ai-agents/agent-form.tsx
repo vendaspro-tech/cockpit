@@ -3,6 +3,7 @@
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
+import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -10,6 +11,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useToast } from "@/hooks/use-toast"
 import { createAgent, updateAgent, deleteAgent } from "@/app/actions/admin/ai-agents"
+import { X } from "lucide-react"
 
 type AgentFormProps = {
   mode: "create" | "edit"
@@ -20,6 +22,8 @@ type AgentFormProps = {
     system_prompt: string
     model: string
     temperature: number
+    product_tags: string[]
+    category_tags: string[]
     status: "active" | "inactive"
   }
 }
@@ -34,8 +38,24 @@ export function AgentForm({ mode, agentId, initial }: AgentFormProps) {
     systemPrompt: initial?.system_prompt ?? "",
     model: initial?.model ?? "gpt-4o-mini",
     temperature: initial?.temperature ?? 0.7,
+    productTags: initial?.product_tags ?? [],
+    categoryTags: initial?.category_tags ?? [],
     status: initial?.status ?? "active",
   })
+  const [productDraft, setProductDraft] = useState("")
+  const [categoryDraft, setCategoryDraft] = useState("")
+
+  const addTag = (kind: "productTags" | "categoryTags", value: string) => {
+    const tag = value.trim().replace(/\s+/g, " ")
+    if (!tag) return
+    const current = form[kind]
+    if (current.some((item) => item.toLowerCase() === tag.toLowerCase())) return
+    setForm({ ...form, [kind]: [...current, tag] })
+  }
+
+  const removeTag = (kind: "productTags" | "categoryTags", value: string) => {
+    setForm({ ...form, [kind]: form[kind].filter((item) => item !== value) })
+  }
 
   const handleSave = async () => {
     setLoading(true)
@@ -162,6 +182,60 @@ export function AgentForm({ mode, agentId, initial }: AgentFormProps) {
               value={form.temperature}
               onChange={(e) => setForm({ ...form, temperature: Number(e.target.value) })}
             />
+          </div>
+        </div>
+
+        <div className="grid gap-4 md:grid-cols-2">
+          <div className="space-y-2">
+            <Label>Produtos</Label>
+            <Input
+              value={productDraft}
+              placeholder="Digite e pressione Enter"
+              onChange={(e) => setProductDraft(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault()
+                  addTag("productTags", productDraft)
+                  setProductDraft("")
+                }
+              }}
+            />
+            <div className="flex flex-wrap gap-1">
+              {form.productTags.map((tag) => (
+                <Badge key={`product-${tag}`} variant="outline" className="gap-1">
+                  {tag}
+                  <button type="button" onClick={() => removeTag("productTags", tag)} aria-label={`Remover ${tag}`}>
+                    <X className="h-3 w-3" />
+                  </button>
+                </Badge>
+              ))}
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Categorias</Label>
+            <Input
+              value={categoryDraft}
+              placeholder="Digite e pressione Enter"
+              onChange={(e) => setCategoryDraft(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault()
+                  addTag("categoryTags", categoryDraft)
+                  setCategoryDraft("")
+                }
+              }}
+            />
+            <div className="flex flex-wrap gap-1">
+              {form.categoryTags.map((tag) => (
+                <Badge key={`category-${tag}`} variant="secondary" className="gap-1">
+                  {tag}
+                  <button type="button" onClick={() => removeTag("categoryTags", tag)} aria-label={`Remover ${tag}`}>
+                    <X className="h-3 w-3" />
+                  </button>
+                </Badge>
+              ))}
+            </div>
           </div>
         </div>
 

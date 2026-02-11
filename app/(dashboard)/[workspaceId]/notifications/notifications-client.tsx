@@ -10,11 +10,11 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
 import { useState, useTransition } from "react"
-import { useRouter } from "next/navigation"
 import { toast } from "@/hooks/use-toast"
 
 interface NotificationsClientProps {
   notifications: Notification[]
+  workspaceId: string
 }
 
 function NotificationsEmptyState({ message }: { message: string }) {
@@ -63,24 +63,23 @@ const TYPE_CONFIG = {
   }
 }
 
-export function NotificationsClient({ notifications }: NotificationsClientProps) {
-  const router = useRouter()
+export function NotificationsClient({ notifications, workspaceId }: NotificationsClientProps) {
   const [isPending, startTransition] = useTransition()
   
   // Optimistic state could be complex, relying on router refresh for simplicity first.
   // But to make it snappy, we can filter locally while waiting.
   // Let's just use router.refresh() via server action revalidatePath.
   
-  const handleMarkAsRead = async (id: string) => {
+  const handleMarkAsRead = async (id: string, source: Notification["source"]) => {
     startTransition(async () => {
-      await markNotificationAsRead(id)
+      await markNotificationAsRead(id, source, workspaceId)
       toast({ title: "Sucesso", description: "Notificação marcada como lida." })
     })
   }
 
-  const handleArchive = async (id: string) => {
+  const handleArchive = async (id: string, source: Notification["source"]) => {
     startTransition(async () => {
-      await archiveNotification(id)
+      await archiveNotification(id, source, workspaceId)
       toast({ title: "Sucesso", description: "Notificação arquivada." })
     })
   }
@@ -133,7 +132,7 @@ export function NotificationsClient({ notifications }: NotificationsClientProps)
                         size="icon" 
                         variant="ghost" 
                         className="h-7 w-7 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-full"
-                        onClick={() => handleMarkAsRead(notification.id)}
+                        onClick={() => handleMarkAsRead(notification.id, notification.source)}
                         disabled={isPending}
                       >
                         <Check className="h-3.5 w-3.5" />
@@ -152,7 +151,7 @@ export function NotificationsClient({ notifications }: NotificationsClientProps)
                         size="icon" 
                         variant="ghost" 
                         className="h-7 w-7 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-full"
-                        onClick={() => handleArchive(notification.id)}
+                        onClick={() => handleArchive(notification.id, notification.source)}
                         disabled={isPending}
                       >
                         <Archive className="h-3.5 w-3.5" />

@@ -71,7 +71,7 @@ interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
   plan?: string
 }
 
-export function AppSidebar({ workspaceId, workspaceName, logoUrl, role: _role, workspaces, alertsCount = 0, plan, ...props }: AppSidebarProps) {
+export function AppSidebar({ workspaceId, workspaceName, logoUrl, role, workspaces, alertsCount = 0, plan, ...props }: AppSidebarProps) {
   const pathname = usePathname()
   const pathDefaultGroup = useMemo(() => {
     if (pathname.includes('/comercial-pro')) return 'comercialpro'
@@ -80,7 +80,7 @@ export function AppSidebar({ workspaceId, workspaceName, logoUrl, role: _role, w
     if (pathname.includes('/products') || pathname.includes('/commercial-plan') || pathname.includes('/otes') || pathname.includes('/strategy')) return 'estrategia'
     return null
   }, [pathname])
-  void _role
+  const showSupportEntry = role !== 'system_owner'
   const [userOpenGroup, setUserOpenGroup] = useState<string | null | undefined>(undefined)
   const resolvedOpenGroup = userOpenGroup === undefined ? pathDefaultGroup : userOpenGroup
   const setGroupOpen = (group: string, open: boolean) => {
@@ -395,14 +395,16 @@ export function AppSidebar({ workspaceId, workspaceName, logoUrl, role: _role, w
                   </a>
                 </SidebarMenuButton>
               </SidebarMenuItem>
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild tooltip="Suporte">
-                  <a href={`/${workspaceId}/support`} suppressHydrationWarning>
-                    <LifeBuoy className="h-5 w-5" />
-                    <span className="sr-only">Suporte</span>
-                  </a>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
+              {showSupportEntry ? (
+                <SidebarMenuItem>
+                  <SidebarMenuButton asChild tooltip="Suporte">
+                    <a href={`/${workspaceId}/support`} suppressHydrationWarning>
+                      <LifeBuoy className="h-5 w-5" />
+                      <span className="sr-only">Suporte</span>
+                    </a>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              ) : null}
             </SidebarMenu>
           </SidebarContent>
         </SidebarGroup>

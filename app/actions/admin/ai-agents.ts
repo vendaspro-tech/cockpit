@@ -482,9 +482,11 @@ export async function getAdminTrainingMessages(conversationId: string): Promise<
   return (data ?? []) as AdminTrainingMessage[]
 }
 
-export async function deleteAdminTrainingConversation(conversationId: string) {
+type AdminActionResult = { success: true } | { error: string }
+
+export async function deleteAdminTrainingConversation(conversationId: string): Promise<AdminActionResult> {
   const auth = await requireSystemOwner()
-  if ("error" in auth) return auth
+  if ("error" in auth) return { error: auth.error ?? "Não autorizado" }
 
   const supabase = createAdminClient()
   const { error } = await supabase

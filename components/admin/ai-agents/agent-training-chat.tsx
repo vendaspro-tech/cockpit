@@ -65,7 +65,7 @@ export function AgentTrainingChat({
     if (!confirmed) return
 
     const result = await deleteAdminTrainingConversation(conversationId)
-    if (result?.error) {
+    if ("error" in result) {
       toast({ title: "Erro", description: result.error, variant: "destructive" })
       return
     }

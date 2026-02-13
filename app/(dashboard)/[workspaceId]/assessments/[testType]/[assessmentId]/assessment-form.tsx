@@ -63,8 +63,14 @@ interface AssessmentFormProps {
 export function AssessmentForm({ structure, assessmentId, testType, initialData, products, onSave, isOwner = false, workspaceId }: AssessmentFormProps) {
   const router = useRouter()
   const initialAnswers = useMemo(() => initialData?.answers || {}, [initialData])
-  const initialCategoryIndex = typeof initialData?.currentCategoryIndex === 'number' ? initialData.currentCategoryIndex : null
-  const initialQuestionIndex = typeof initialData?.currentQuestionIndex === 'number' ? initialData.currentQuestionIndex : null
+  const initialCategoryIndex: number | null =
+    typeof initialData?.currentCategoryIndex === 'number'
+      ? initialData.currentCategoryIndex
+      : null
+  const initialQuestionIndex: number | null =
+    typeof initialData?.currentQuestionIndex === 'number'
+      ? initialData.currentQuestionIndex
+      : null
 
   const computeResumePosition = useMemo(() => {
     return (categories: Category[], answers: Record<string, number>) => {
@@ -142,10 +148,10 @@ export function AssessmentForm({ structure, assessmentId, testType, initialData,
   })
 
   const [selectedProduct, setSelectedProduct] = useState<string>(initialData?.product_id || 'none')
-  const [currentCategoryIndex, setCurrentCategoryIndex] = useState(
+  const [currentCategoryIndex, setCurrentCategoryIndex] = useState<number>(
     initialCategoryIndex ?? resumePosition.categoryIndex
   )
-  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(
+  const [currentQuestionIndex, setCurrentQuestionIndex] = useState<number>(
     initialQuestionIndex ?? resumePosition.questionIndex
   )
   const [isSaving, setIsSaving] = useState(false)

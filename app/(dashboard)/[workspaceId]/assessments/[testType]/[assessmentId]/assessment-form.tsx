@@ -63,6 +63,8 @@ interface AssessmentFormProps {
 export function AssessmentForm({ structure, assessmentId, testType, initialData, products, onSave, isOwner = false, workspaceId }: AssessmentFormProps) {
   const router = useRouter()
   const initialAnswers = useMemo(() => initialData?.answers || {}, [initialData])
+  const initialCategoryIndex = typeof initialData?.currentCategoryIndex === 'number' ? initialData.currentCategoryIndex : null
+  const initialQuestionIndex = typeof initialData?.currentQuestionIndex === 'number' ? initialData.currentQuestionIndex : null
 
   const computeResumePosition = useMemo(() => {
     return (categories: Category[], answers: Record<string, number>) => {
@@ -82,8 +84,11 @@ export function AssessmentForm({ structure, assessmentId, testType, initialData,
         }
       })
 
-      // Volta para a última respondida; se nenhuma, começo
-      const targetIndex = lastAnsweredIndex >= 0 ? lastAnsweredIndex : 0
+      // Retoma na próxima pergunta após a última respondida; se nenhuma, início
+      const targetIndex =
+        lastAnsweredIndex >= 0
+          ? Math.min(lastAnsweredIndex + 1, flat.length - 1)
+          : 0
       const target = flat[targetIndex]
       return { categoryIndex: target.ci, questionIndex: target.qi }
     }
@@ -137,8 +142,12 @@ export function AssessmentForm({ structure, assessmentId, testType, initialData,
   })
 
   const [selectedProduct, setSelectedProduct] = useState<string>(initialData?.product_id || 'none')
-  const [currentCategoryIndex, setCurrentCategoryIndex] = useState(resumePosition.categoryIndex)
-  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(resumePosition.questionIndex)
+  const [currentCategoryIndex, setCurrentCategoryIndex] = useState(
+    initialCategoryIndex ?? resumePosition.categoryIndex
+  )
+  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(
+    initialQuestionIndex ?? resumePosition.questionIndex
+  )
   const [isSaving, setIsSaving] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [showExitDialog, setShowExitDialog] = useState(false)
@@ -147,6 +156,20 @@ export function AssessmentForm({ structure, assessmentId, testType, initialData,
 
   const categories = structure.categories
   const currentCategory = categories[currentCategoryIndex]
+
+  useEffect(() => {
+    if (categories.length === 0) return
+    if (!categories[currentCategoryIndex]) {
+      setCurrentCategoryIndex(0)
+      setCurrentQuestionIndex(0)
+      return
+    }
+
+    const maxQuestionIndex = Math.max(categories[currentCategoryIndex].questions.length - 1, 0)
+    if (currentQuestionIndex > maxQuestionIndex) {
+      setCurrentQuestionIndex(maxQuestionIndex)
+    }
+  }, [categories, currentCategoryIndex, currentQuestionIndex])
 
   // Calculate progress
   const totalQuestions = categories.reduce((acc, cat) => acc + cat.questions.length, 0)
@@ -197,6 +220,7 @@ export function AssessmentForm({ structure, assessmentId, testType, initialData,
       answers: mergedAnswers,
       comments: finalComments,
       currentCategoryIndex: overrides.categoryIndex ?? currentCategoryIndex,
+      currentQuestionIndex: overrides.questionIndex ?? currentQuestionIndex,
       product_id: productValue === 'none' ? null : productValue
     }
   }
@@ -261,8 +285,14 @@ export function AssessmentForm({ structure, assessmentId, testType, initialData,
     router.push(exitPath)
   }
 
-  const confirmExit = () => {
+  const confirmExit = async () => {
     setShowExitDialog(false)
+    try {
+      const payload = buildPayload()
+      await onSave(payload, 'draft', forceComplete)
+    } catch (error) {
+      console.error('Error saving draft before exit:', error)
+    }
     router.push(exitPath)
   }
 

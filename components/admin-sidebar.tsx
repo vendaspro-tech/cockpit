@@ -66,6 +66,7 @@ export function AdminSidebar({ className, ...props }: React.ComponentProps<typeo
       pathname.includes('/admin/subscriptions') ||
       pathname.includes('/admin/users') ||
       pathname.includes('/admin/plans') ||
+      pathname.includes('/admin/usage') ||
       pathname.includes('/admin/avaliacoes-pdis') ||
       pathname.includes('/admin/feedback') ||
       pathname.includes('/admin/bugs')
@@ -143,6 +144,14 @@ export function AdminSidebar({ className, ...props }: React.ComponentProps<typeo
                     <Link href="/admin/plans">
                       <FileText />
                       <span>Planos</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+                <SidebarMenuItem>
+                  <SidebarMenuButton asChild isActive={pathname.includes('/admin/usage')}>
+                    <Link href="/admin/usage">
+                      <Activity />
+                      <span>Uso da Plataforma</span>
                     </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItem>

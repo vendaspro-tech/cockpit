@@ -15,6 +15,7 @@ Centraliza links para documentos do projeto. Atualize quando mover ou criar novo
 - Guia de testes: `docs/setup/testing_guide.md`
 - Design system: `docs/design/design-system.md`
 - Stack do projeto: `docs/stack.md`
+- Usage tracking superadmin: `docs/implementation/usage-tracking-superadmin.md`
 
 ## Fase 1
 - **Phase 1 System Overview**: `docs/phase1/README.md` ⭐ **NEW** — Competency & PDI System (US1-US3 complete)

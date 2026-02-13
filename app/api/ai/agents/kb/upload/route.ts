@@ -13,14 +13,41 @@ const UploadSchema = z.object({
 })
 
 const MAX_SIZE_BYTES = 25 * 1024 * 1024
-const ALLOWED_TYPES = new Set(["text/plain", "text/csv", "application/pdf"])
+const ALLOWED_MIME_TYPES = new Set([
+  "text/plain",
+  "text/csv",
+  "application/csv",
+  "text/comma-separated-values",
+  "application/vnd.ms-excel",
+  "application/pdf",
+  "application/octet-stream",
+])
+const ALLOWED_EXTENSIONS = new Set(["pdf", "txt", "csv"])
 
 function sanitizeFileName(name: string) {
   return name.replace(/[^a-zA-Z0-9._-]/g, "_")
 }
 
+function getExtension(name: string) {
+  const value = name.toLowerCase().split(".").pop()
+  return value || ""
+}
+
+function isAllowedFile(file: File) {
+  const ext = getExtension(file.name)
+  if (!ALLOWED_EXTENSIONS.has(ext)) return false
+  return file.type === "" || ALLOWED_MIME_TYPES.has(file.type)
+}
+
+function resolveContentType(file: File) {
+  const ext = getExtension(file.name)
+  if (ext === "pdf") return "application/pdf"
+  if (ext === "csv") return "text/csv"
+  return "text/plain"
+}
+
 async function extractText(file: File, buffer: Buffer) {
-  if (file.type === "application/pdf") {
+  if (file.type === "application/pdf" || getExtension(file.name) === "pdf") {
     const parsed = await pdfParse(buffer)
     return parsed.text?.trim() || ""
   }
@@ -52,7 +79,7 @@ export async function POST(request: NextRequest) {
     if (!file || !(file instanceof File)) {
       return NextResponse.json({ error: "Arquivo inválido" }, { status: 400 })
     }
-    if (!ALLOWED_TYPES.has(file.type)) {
+    if (!isAllowedFile(file)) {
       return NextResponse.json({ error: "Tipo de arquivo não suportado" }, { status: 400 })
     }
     if (file.size > MAX_SIZE_BYTES) {
@@ -74,9 +101,10 @@ export async function POST(request: NextRequest) {
     const storagePath = `${parsed.data.agentId}/${Date.now()}-${safeName}`
 
     const supabase = createAdminClient()
+    const contentType = resolveContentType(file)
     const { error: uploadError } = await supabase.storage
       .from("ai-agent-kb-files")
-      .upload(storagePath, buffer, { contentType: file.type, upsert: false })
+      .upload(storagePath, buffer, { contentType, upsert: false })
 
     if (uploadError) {
       console.error("KB upload error:", uploadError)
@@ -104,7 +132,7 @@ export async function POST(request: NextRequest) {
           source: "file_upload",
         },
         filename: file.name,
-        mime_type: file.type,
+        mime_type: contentType,
         size_bytes: file.size,
         storage_path: storagePath,
       })

@@ -416,3 +416,87 @@ export async function getConversationMessagesAdmin(conversationId: string) {
 
   return data ?? []
 }
+
+export type AdminTrainingConversation = {
+  id: string
+  title: string | null
+  last_message_at: string | null
+  created_at: string
+}
+
+export type AdminTrainingMessage = {
+  id: string
+  sender: "user" | "assistant" | "system"
+  content: string
+  metadata: Record<string, any> | null
+  created_at: string
+}
+
+export async function getAgentTrainingConversationsAdmin(agentId: string): Promise<AdminTrainingConversation[]> {
+  const auth = await requireSystemOwner()
+  if ("error" in auth) return []
+
+  const supabase = createAdminClient()
+  const { data, error } = await supabase
+    .from("ai_admin_agent_conversations")
+    .select("id, title, last_message_at, created_at")
+    .eq("agent_id", agentId)
+    .eq("user_id", auth.userId)
+    .order("last_message_at", { ascending: false, nullsFirst: false })
+
+  if (error) {
+    console.error("Error fetching admin training conversations:", error)
+    return []
+  }
+
+  return (data ?? []) as AdminTrainingConversation[]
+}
+
+export async function getAdminTrainingMessages(conversationId: string): Promise<AdminTrainingMessage[]> {
+  const auth = await requireSystemOwner()
+  if ("error" in auth) return []
+
+  const supabase = createAdminClient()
+  const { data: conversation, error: conversationError } = await supabase
+    .from("ai_admin_agent_conversations")
+    .select("id")
+    .eq("id", conversationId)
+    .eq("user_id", auth.userId)
+    .maybeSingle()
+
+  if (conversationError || !conversation) {
+    return []
+  }
+
+  const { data, error } = await supabase
+    .from("ai_admin_agent_messages")
+    .select("id, sender, content, metadata, created_at")
+    .eq("conversation_id", conversationId)
+    .order("created_at", { ascending: true })
+
+  if (error) {
+    console.error("Error fetching admin training messages:", error)
+    return []
+  }
+
+  return (data ?? []) as AdminTrainingMessage[]
+}
+
+export async function deleteAdminTrainingConversation(conversationId: string) {
+  const auth = await requireSystemOwner()
+  if ("error" in auth) return auth
+
+  const supabase = createAdminClient()
+  const { error } = await supabase
+    .from("ai_admin_agent_conversations")
+    .delete()
+    .eq("id", conversationId)
+    .eq("user_id", auth.userId)
+
+  if (error) {
+    console.error("Error deleting admin training conversation:", error)
+    return { error: "Erro ao excluir conversa" }
+  }
+
+  return { success: true }
+}

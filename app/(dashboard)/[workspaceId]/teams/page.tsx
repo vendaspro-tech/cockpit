@@ -1,7 +1,6 @@
 import { getTeamMembers, getJobTitles, getAvailableRoles } from "@/app/actions/teams"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { getWorkspacePlanUsage } from "@/app/actions/plans"
-import { getWorkspaceInvitations } from "@/app/actions/invitations"
 import { getWorkspaceSquads } from "@/app/actions/squads"
 import { TeamsClient } from "@/components/teams/teams-client"
 
@@ -18,7 +17,6 @@ export default async function TeamsPage({ params }: TeamsPageProps) {
   const jobTitles = await getJobTitles(workspaceId)
   const roles = await getAvailableRoles()
   const planUsage = await getWorkspacePlanUsage(workspaceId)
-  const invitations = await getWorkspaceInvitations(workspaceId)
   const squadsResult = await getWorkspaceSquads(workspaceId)
   const squads = squadsResult.data || []
   const { data: workspace } = await supabase
@@ -35,7 +33,6 @@ export default async function TeamsPage({ params }: TeamsPageProps) {
       jobTitles={jobTitles}
       roles={roles}
       planUsage={planUsage}
-      invitations={invitations}
       squads={squads}
     />
   )

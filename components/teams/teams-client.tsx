@@ -3,10 +3,9 @@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { InviteUserDialog } from "./invite-user-dialog"
 import { SquadOrgChartClient } from "@/components/squads/squad-org-chart-client"
-import { Users, Network, Mail } from "lucide-react"
+import { Users, Network } from "lucide-react"
 import { Squad } from "@/app/actions/squads"
 import { MembersList } from "./members-list"
-import { InvitationsList } from "./invitations-list"
 
 interface TeamsClientProps {
   workspaceId: string
@@ -15,7 +14,6 @@ interface TeamsClientProps {
   jobTitles: any[]
   roles: any[]
   planUsage: any
-  invitations: any[]
   squads: Squad[]
 }
 
@@ -26,7 +24,6 @@ export function TeamsClient({
   jobTitles,
   roles,
   planUsage,
-  invitations,
   squads
 }: TeamsClientProps) {
   return (
@@ -54,7 +51,7 @@ export function TeamsClient({
 
       <Tabs defaultValue="members" className="flex-1 flex flex-col overflow-hidden">
         <div className="px-6 pt-4">
-          <TabsList className="grid w-full max-w-lg grid-cols-3">
+          <TabsList className="grid w-full max-w-lg grid-cols-2">
             <TabsTrigger value="members" className="flex items-center gap-2">
               <Users className="w-4 h-4" />
               Membros
@@ -62,10 +59,6 @@ export function TeamsClient({
             <TabsTrigger value="squads" className="flex items-center gap-2">
               <Network className="w-4 h-4" />
               Squads
-            </TabsTrigger>
-            <TabsTrigger value="invitations" className="flex items-center gap-2">
-              <Mail className="w-4 h-4" />
-              Convites ({invitations.length})
             </TabsTrigger>
           </TabsList>
         </div>
@@ -85,13 +78,6 @@ export function TeamsClient({
             workspaceName={workspaceName}
             squads={squads}
             members={members}
-          />
-        </TabsContent>
-
-        <TabsContent value="invitations" className="flex-1 m-0">
-          <InvitationsList
-            workspaceId={workspaceId}
-            invitations={invitations}
           />
         </TabsContent>
       </Tabs>

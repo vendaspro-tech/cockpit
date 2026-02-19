@@ -16,9 +16,11 @@ type InternalUserRow = {
 
 type MembershipRow = {
   user_id: string
+  role: string | null
   job_titles: {
     name: string | null
     slug: string | null
+    hierarchy_level: number | null
   } | null
 }
 
@@ -78,7 +80,7 @@ export async function assertLeaderEligible(
 
   const { data, error } = await supabase
     .from("workspace_members")
-    .select("user_id, job_titles:job_title_id(name, slug)")
+    .select("user_id, role, job_titles:job_title_id(name, slug, hierarchy_level)")
     .eq("workspace_id", workspaceId)
     .eq("user_id", internalUserId)
     .maybeSingle()
@@ -88,10 +90,16 @@ export async function assertLeaderEligible(
   }
 
   const member = data as unknown as MembershipRow
+  const role = member.role?.toLowerCase().trim() ?? ""
   const slug = member.job_titles?.slug?.toLowerCase().trim() ?? ""
   const name = member.job_titles?.name?.toLowerCase().trim() ?? ""
+  const hierarchyLevel = member.job_titles?.hierarchy_level ?? null
 
-  if (!ELIGIBLE_SLUGS.has(slug) && !ELIGIBLE_NAMES.has(name)) {
+  const eligibleByRole = role === "owner" || role === "admin"
+  const eligibleByHierarchy = hierarchyLevel !== null && hierarchyLevel <= 2
+  const eligibleByTitle = ELIGIBLE_SLUGS.has(slug) || ELIGIBLE_NAMES.has(name)
+
+  if (!eligibleByRole && !eligibleByHierarchy && !eligibleByTitle) {
     return { eligible: false, internalUserId, reason: "Cargo não elegível" }
   }
 

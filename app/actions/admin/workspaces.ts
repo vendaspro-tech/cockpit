@@ -173,3 +173,31 @@ export async function updateWorkspaceStatus(
   revalidatePath(`/admin/workspaces`)
   return { success: true }
 }
+
+export async function updateWorkspaceLeaderCopilot(workspaceId: string, enabled: boolean) {
+  const user = await getAuthUser()
+  if (!user) return { error: 'Não autorizado' }
+
+  const owner = await isSystemOwner(user.id)
+  if (!owner) return { error: 'Não autorizado' }
+
+  const supabase = createAdminClient()
+
+  const { error } = await supabase
+    .from('workspace_features')
+    .upsert(
+      {
+        workspace_id: workspaceId,
+        leader_copilot_enabled: enabled,
+      },
+      { onConflict: 'workspace_id' }
+    )
+
+  if (error) {
+    console.error('Error updating workspace leader copilot flag:', error)
+    return { error: 'Erro ao atualizar permissão do Copiloto do Líder' }
+  }
+
+  revalidatePath(`/admin/workspaces`)
+  return { success: true }
+}

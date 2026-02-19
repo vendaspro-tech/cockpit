@@ -112,7 +112,7 @@ function DraggableTaskCard({
   onDelete,
   getPDIContext,
 }: TaskCardProps) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useDraggable({
+  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: task.id,
     data: {
       taskId: task.id,
@@ -122,7 +122,6 @@ function DraggableTaskCard({
 
   const style = {
     transform: CSS.Translate.toString(transform),
-    transition,
   }
 
   return (

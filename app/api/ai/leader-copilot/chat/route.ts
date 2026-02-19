@@ -54,7 +54,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Agente de copiloto não configurado" }, { status: 500 })
     }
 
-    let resolvedConversationId = conversationId
+    let resolvedConversationId: string | null = conversationId ?? null
 
     if (resolvedConversationId) {
       const { data: conversation, error: conversationError } = await supabase
@@ -92,6 +92,10 @@ export async function POST(request: NextRequest) {
       }
 
       resolvedConversationId = createdConversation.id
+    }
+
+    if (!resolvedConversationId) {
+      return NextResponse.json({ error: "Falha ao resolver conversa" }, { status: 500 })
     }
 
     const { error: userMessageError } = await supabase.from("ai_messages").insert({

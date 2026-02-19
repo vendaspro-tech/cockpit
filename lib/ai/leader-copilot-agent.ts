@@ -70,6 +70,15 @@ type AssessmentRow = {
   status: string
 }
 
+type FunctionToolCall = {
+  id: string
+  type: "function"
+  function: {
+    name: string
+    arguments: string
+  }
+}
+
 function safeJsonParse(value: string): Record<string, any> {
   try {
     return JSON.parse(value)
@@ -82,11 +91,32 @@ function nowIso() {
   return new Date().toISOString()
 }
 
+function isFunctionToolCall(toolCall: unknown): toolCall is FunctionToolCall {
+  if (!toolCall || typeof toolCall !== "object") return false
+  const obj = toolCall as Record<string, any>
+  return obj.type === "function" && !!obj.function && typeof obj.function.name === "string"
+}
+
 function mapTaskPriority(priority: string | null | undefined): "P1" | "P2" | "P3" | null {
   if (!priority) return null
   const normalized = priority.toUpperCase().trim()
   if (normalized === "P1" || normalized === "P2" || normalized === "P3") return normalized
   return null
+}
+
+function shouldForceTeamProgressFallback(message: string): boolean {
+  return /(quant|qtd|avalia|avaliac|time|progres|status|tarefa|task|pdi)/i.test(message)
+}
+
+function buildTeamProgressAnswer(snapshot: LeaderProgressSnapshot): string {
+  const { totals } = snapshot
+  return [
+    `Resumo atual do seu time (${totals.users} pessoas no escopo):`,
+    `- Avaliações: ${totals.assessments.completed} concluídas e ${totals.assessments.draft} em andamento/rascunho.`,
+    `- Tarefas: ${totals.tasks.total} no total (${totals.tasks.todo} a fazer, ${totals.tasks.in_progress} em progresso, ${totals.tasks.done} concluídas, ${totals.tasks.overdue} atrasadas).`,
+    `- PDIs: ${totals.pdis.active} ativos, ${totals.pdis.completed} concluídos, ${totals.pdis.draft} rascunhos, ${totals.pdis.archived} arquivados.`,
+    `Se quiser, eu detalho por colaborador ou já preparo uma ação.`,
+  ].join("\n")
 }
 
 export async function getLeaderCopilotAgentId(): Promise<string | null> {
@@ -148,7 +178,7 @@ async function getTeamProgressSnapshot(
   ])
 
   const taskRows = (tasks ?? []) as TaskRow[]
-  const pdiRows = ([...(pdis ?? []), ...(pdiPlans ?? [])] ?? []) as PdiRow[]
+  const pdiRows = [...(pdis ?? []), ...(pdiPlans ?? [])] as PdiRow[]
   const assessmentRows = (assessments ?? []) as AssessmentRow[]
 
   const authToInternal = new Map(scopedUsers.map((user) => [user.auth_user_id, user.id]))
@@ -604,8 +634,21 @@ export async function runLeaderCopilotTurn(params: RunTurnParams): Promise<ToolC
 
   const firstMessage = firstCompletion.choices[0]?.message
   const toolCalls = firstMessage?.tool_calls ?? []
+  const functionToolCalls = toolCalls.filter(isFunctionToolCall)
 
-  if (toolCalls.length === 0) {
+  if (functionToolCalls.length === 0) {
+    if (shouldForceTeamProgressFallback(params.message)) {
+      const snapshot = await getTeamProgressSnapshot(params.workspaceId, params.actorAuthUserId, scopedUsers)
+      return {
+        type: "answer",
+        message: buildTeamProgressAnswer(snapshot),
+        metadata: {
+          model: "fallback-team-progress",
+          forced_tool: "get_team_progress",
+        },
+      }
+    }
+
     return {
       type: "answer",
       message: firstMessage?.content?.trim() || "Não consegui gerar uma resposta agora.",
@@ -628,13 +671,13 @@ export async function runLeaderCopilotTurn(params: RunTurnParams): Promise<ToolC
     {
       role: "assistant",
       content: firstMessage?.content ?? "",
-      tool_calls: toolCalls,
+      tool_calls: functionToolCalls,
     },
   ]
 
   let pendingAction: ToolCallResult["pendingAction"] | undefined
 
-  for (const toolCall of toolCalls) {
+  for (const toolCall of functionToolCalls) {
     const args = safeJsonParse(toolCall.function.arguments || "{}")
     const result = await executeToolCall(toolCall.function.name, args, context)
 
@@ -656,7 +699,7 @@ export async function runLeaderCopilotTurn(params: RunTurnParams): Promise<ToolC
       pendingAction,
       metadata: {
         model: "gpt-4o-mini",
-        tool_calls: toolCalls.map((call) => call.function.name),
+        tool_calls: functionToolCalls.map((call) => call.function.name),
       },
     }
   }
@@ -674,7 +717,7 @@ export async function runLeaderCopilotTurn(params: RunTurnParams): Promise<ToolC
       "Consegui consultar os dados, mas não consegui formatar uma resposta.",
     metadata: {
       model: "gpt-4o-mini",
-      tool_calls: toolCalls.map((call) => call.function.name),
+      tool_calls: functionToolCalls.map((call) => call.function.name),
     },
   }
 }

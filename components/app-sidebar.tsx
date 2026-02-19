@@ -66,12 +66,23 @@ interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
   workspaceName: string
   logoUrl?: string | null
   role?: string
+  showLeaderCopilot?: boolean
   workspaces: { id: string; name: string; logo_url?: string | null }[]
   alertsCount?: number
   plan?: string
 }
 
-export function AppSidebar({ workspaceId, workspaceName, logoUrl, role, workspaces, alertsCount = 0, plan, ...props }: AppSidebarProps) {
+export function AppSidebar({
+  workspaceId,
+  workspaceName,
+  logoUrl,
+  role,
+  showLeaderCopilot = false,
+  workspaces,
+  alertsCount = 0,
+  plan,
+  ...props
+}: AppSidebarProps) {
   const pathname = usePathname()
   const pathDefaultGroup = useMemo(() => {
     if (pathname.includes('/comercial-pro')) return 'comercialpro'
@@ -142,6 +153,16 @@ export function AppSidebar({ workspaceId, workspaceName, logoUrl, role, workspac
                 </a>
               </SidebarMenuButton>
             </SidebarMenuItem>
+            {showLeaderCopilot ? (
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild isActive={pathname.includes('/copiloto-lider')}>
+                  <a href={`/${workspaceId}/copiloto-lider`}>
+                    <Bot />
+                    <span>Copiloto do Líder</span>
+                  </a>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            ) : null}
             <SidebarMenuItem>
               <SidebarMenuButton asChild isActive={pathname.includes('/teams')}>
                 <a href={`/${workspaceId}/teams`}>

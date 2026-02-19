@@ -28,6 +28,7 @@ const routeNameMap: Record<string, string> = {
   'def': 'Matriz DEF',
   'disc': 'Perfil DISC',
   'notifications': 'Notificações',
+  'copiloto-lider': 'Copiloto do Líder',
   'diagnosis': 'Diagnóstico',
   'otes': 'OTEs',
   'calendar': 'Agenda',

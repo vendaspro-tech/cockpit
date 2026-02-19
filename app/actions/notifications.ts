@@ -6,7 +6,7 @@ import { createClient } from '@/lib/supabase/server'
 import { getAuthUser } from '@/lib/auth-server'
 import { getUserRole } from '@/lib/auth-utils'
 
-export type NotificationSource = 'system_alert' | 'bug_report'
+export type NotificationSource = 'system_alert' | 'bug_report' | 'workspace_notification'
 
 export interface Notification {
   id: string
@@ -40,7 +40,7 @@ export async function getUserNotifications(workspaceId: string): Promise<Notific
 
   const nowIso = new Date().toISOString()
 
-  const [{ data: alerts }, { data: statuses }, { data: bugNotifications }] = await Promise.all([
+  const [{ data: alerts }, { data: statuses }, { data: bugNotifications }, { data: workspaceNotifications }] = await Promise.all([
     supabase
       .from('system_alerts')
       .select('*')
@@ -58,6 +58,12 @@ export async function getUserNotifications(workspaceId: string): Promise<Notific
         'id, title, message, type, read_at, archived_at, created_at, bug_report:bug_report_id(id, workspace_id)'
       )
       .eq('user_id', userData.id)
+      .order('created_at', { ascending: false }),
+    supabase
+      .from('workspace_user_notifications')
+      .select('id, title, message, type, read_at, archived_at, created_at, workspace_id')
+      .eq('user_id', userData.id)
+      .eq('workspace_id', workspaceId)
       .order('created_at', { ascending: false }),
   ])
 
@@ -133,7 +139,32 @@ export async function getUserNotifications(workspaceId: string): Promise<Notific
       }
     })
 
-  return [...systemNotifications, ...bugItems].sort((a, b) => {
+  const workspaceItems: Notification[] = (workspaceNotifications ?? []).map((notification) => {
+    const archivedAt = notification.archived_at ?? null
+    const readAt = notification.read_at ?? null
+
+    const status: 'new' | 'read' | 'archived' = archivedAt
+      ? 'archived'
+      : readAt
+        ? 'read'
+        : 'new'
+
+    return {
+      id: notification.id,
+      title: notification.title,
+      message: notification.message,
+      type: notification.type,
+      status,
+      read_at: readAt,
+      archived_at: archivedAt,
+      start_date: notification.created_at,
+      end_date: notification.created_at,
+      created_at: notification.created_at,
+      source: 'workspace_notification',
+    }
+  })
+
+  return [...systemNotifications, ...bugItems, ...workspaceItems].sort((a, b) => {
     return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
   })
 }
@@ -169,9 +200,15 @@ export async function markNotificationAsRead(
         onConflict: 'user_id, alert_id',
       }
     )
-  } else {
+  } else if (source === 'bug_report') {
     await supabase
       .from('bug_report_notifications')
+      .update({ read_at: nowIso })
+      .eq('id', notificationId)
+      .eq('user_id', userData.id)
+  } else {
+    await supabase
+      .from('workspace_user_notifications')
       .update({ read_at: nowIso })
       .eq('id', notificationId)
       .eq('user_id', userData.id)
@@ -219,7 +256,7 @@ export async function archiveNotification(
         onConflict: 'user_id, alert_id',
       }
     )
-  } else {
+  } else if (source === 'bug_report') {
     const { data: existing } = await supabase
       .from('bug_report_notifications')
       .select('read_at')
@@ -229,6 +266,22 @@ export async function archiveNotification(
 
     await supabase
       .from('bug_report_notifications')
+      .update({
+        read_at: existing?.read_at || nowIso,
+        archived_at: nowIso,
+      })
+      .eq('id', notificationId)
+      .eq('user_id', userData.id)
+  } else {
+    const { data: existing } = await supabase
+      .from('workspace_user_notifications')
+      .select('read_at')
+      .eq('id', notificationId)
+      .eq('user_id', userData.id)
+      .maybeSingle()
+
+    await supabase
+      .from('workspace_user_notifications')
       .update({
         read_at: existing?.read_at || nowIso,
         archived_at: nowIso,

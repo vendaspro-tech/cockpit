@@ -11,9 +11,19 @@ import { getAuthUser } from "@/lib/auth-server"
 export async function getUnifiedTasks(workspaceId: string): Promise<UnifiedTask[]> {
   const { createAdminClient } = await import('@/lib/supabase/admin')
   const supabase = createAdminClient()
-  const user = await getAuthUser()
+  const authUser = await getAuthUser()
 
-  if (!user) return []
+  if (!authUser) return []
+
+  // pdi_plans.user_id references public.users.id, while tasks.user_id references auth.users.id.
+  // Resolve internal user id so PDI actions are fetched correctly.
+  const { data: dbUser } = await supabase
+    .from('users')
+    .select('id')
+    .eq('supabase_user_id', authUser.id)
+    .maybeSingle()
+
+  const internalUserId = dbUser?.id ?? null
 
   // 1. Fetch Standalone Tasks
   type TaskRow = {
@@ -28,7 +38,12 @@ export async function getUnifiedTasks(workspaceId: string): Promise<UnifiedTask[
   }
 
   type PdiPlanRow = { id: string }
-  type PdiItemRow = { id: string; category_name: string | null; pdi_plan_id: string }
+  type PdiItemRow = {
+    id: string
+    category_name: string | null
+    criterion: string | null
+    pdi_plan_id: string
+  }
   type PdiActionRow = {
     id: string
     pdi_item_id: string
@@ -57,7 +72,7 @@ export async function getUnifiedTasks(workspaceId: string): Promise<UnifiedTask[
     .from('tasks')
     .select('*')
     .eq('workspace_id', workspaceId)
-    .eq('user_id', user.id) // Only user's tasks for now, or remove for team view
+    .eq('user_id', authUser.id) // tasks.user_id -> auth.users.id
     .order('created_at', { ascending: false })
 
   if (tasksError) {
@@ -70,7 +85,7 @@ export async function getUnifiedTasks(workspaceId: string): Promise<UnifiedTask[
     .from('pdi_plans')
     .select('id')
     .eq('workspace_id', workspaceId)
-    .eq('user_id', user.id)
+    .eq('user_id', internalUserId || authUser.id)
 
   if (plansError) {
     console.error('Error fetching PDI plans:', plansError)
@@ -86,7 +101,7 @@ export async function getUnifiedTasks(workspaceId: string): Promise<UnifiedTask[
     // Get PDI items for these plans
     const { data: pdiItems, error: itemsError } = await supabase
       .from('pdi_items')
-      .select('id, category_name, pdi_plan_id')
+      .select('id, category_name, criterion, pdi_plan_id')
       .in('pdi_plan_id', planIds)
 
     if (itemsError) {
@@ -165,7 +180,8 @@ export async function getUnifiedTasks(workspaceId: string): Promise<UnifiedTask[
         metadata: {
           pdi_plan_id: action.pdi_item?.pdi_plan_id,
           pdi_item_id: action.pdi_item?.id,
-          category: action.pdi_item?.category_name ?? undefined
+          category: action.pdi_item?.category_name ?? undefined,
+          pdi_criterion: action.pdi_item?.criterion ?? undefined
         }
       })
     })
@@ -179,10 +195,15 @@ export async function getUnifiedTasks(workspaceId: string): Promise<UnifiedTask[
     .in('status', ['planning', 'executing'])
 
   if (cyclesError) {
-    console.error('Error fetching strategic cycles:', cyclesError)
+    // Keep tasks page resilient when strategic modules/tables are unavailable.
+    const errorCode = (cyclesError as { code?: string } | null)?.code
+    const isMissingRelation = errorCode === '42P01' || errorCode === 'PGRST205'
+    if (!isMissingRelation) {
+      console.warn('Warning fetching strategic cycles:', cyclesError)
+    }
   }
 
-  if (strategicCycles && strategicCycles.length > 0) {
+  if (!cyclesError && strategicCycles && strategicCycles.length > 0) {
     const cycleIds = strategicCycles.map(c => c.id)
     const cycleMap = new Map(strategicCycles.map(c => [c.id, c.name]))
 
@@ -190,7 +211,7 @@ export async function getUnifiedTasks(workspaceId: string): Promise<UnifiedTask[
       .from('execution_actions')
       .select('*')
       .in('cycle_id', cycleIds)
-      .or(`owner_id.eq.${user.id},owner_id.is.null`) // User's actions or unassigned
+      .or(`owner_id.eq.${internalUserId || authUser.id},owner_id.is.null`) // User's actions or unassigned
 
     if (execError) {
       console.error('Error fetching execution actions:', execError)

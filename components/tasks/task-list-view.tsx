@@ -122,6 +122,13 @@ export function TaskListView({ tasks }: TaskListViewProps) {
     }
   }
 
+  const getPDIContext = (task: UnifiedTask) => {
+    if (task.type !== 'pdi_action') return null
+
+    const contextParts = [task.metadata?.category, task.metadata?.pdi_criterion].filter(Boolean)
+    return contextParts.length > 0 ? `PDI • ${contextParts.join(' • ')}` : 'PDI'
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex justify-end">
@@ -156,10 +163,17 @@ export function TaskListView({ tasks }: TaskListViewProps) {
               </TableRow>
             ) : (
               filteredTasks.map((task) => (
-                <TableRow key={task.id} className="group">
+                <TableRow
+                  key={task.id}
+                  className="group cursor-pointer"
+                  onClick={() => setEditingTask(task)}
+                >
                   <TableCell>
                     <button 
-                      onClick={() => handleToggleStatus(task)}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        handleToggleStatus(task)
+                      }}
                       className={cn(
                         "flex h-5 w-5 items-center justify-center rounded-full border transition-colors",
                         task.status === 'done' 
@@ -176,6 +190,11 @@ export function TaskListView({ tasks }: TaskListViewProps) {
                       task.status === 'done' && "text-muted-foreground line-through"
                     )}>
                       <span>{task.title}</span>
+                      {task.type === 'pdi_action' && (
+                        <span className="text-xs text-muted-foreground font-normal line-clamp-1">
+                          {getPDIContext(task)}
+                        </span>
+                      )}
                       {task.description && (
                         <span className="text-xs text-muted-foreground font-normal line-clamp-1">
                           {task.description}
@@ -193,7 +212,7 @@ export function TaskListView({ tasks }: TaskListViewProps) {
                           : "bg-muted text-muted-foreground border-border"
                       )}
                     >
-                      {task.type === 'pdi_action' ? 'PDI' : 'Tarefa'}
+                      {task.type === 'pdi_action' ? 'Ação de desenvolvimento (PDI)' : 'Tarefa'}
                     </Badge>
                   </TableCell>
                   <TableCell>
@@ -218,7 +237,12 @@ export function TaskListView({ tasks }: TaskListViewProps) {
                   <TableCell>
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity"
+                          onClick={(e) => e.stopPropagation()}
+                        >
                           <MoreHorizontal className="w-4 h-4" />
                         </Button>
                       </DropdownMenuTrigger>

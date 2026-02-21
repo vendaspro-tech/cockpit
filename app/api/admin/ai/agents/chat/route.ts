@@ -23,6 +23,12 @@ const ChatRequestSchema = z.object({
     .optional(),
 })
 
+function needsInternalKbGrounding(message: string) {
+  return /(no documento|nos documentos|na base|na metodologia|segundo o material|segundo os docs|transcri|aula|playbook|processo de vendas|metodologia|framework|no treinamento)/i.test(
+    message
+  )
+}
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
@@ -145,15 +151,19 @@ export async function POST(request: NextRequest) {
       chunkIndex: number
     }> = []
     let contextMarkdown = ""
+    let usedThreshold = rag?.similarityThreshold ?? 0.55
+    let pendingSources = 0
+    let failedSources = 0
 
-    try {
+    const runRetrieval = async () => {
       const retrieval = await retrieveKbContext(supabase, openai, {
         query: message,
         agentId,
         limit: rag?.limit ?? 12,
-        similarityThreshold: rag?.similarityThreshold ?? 0.68,
+        similarityThreshold: rag?.similarityThreshold ?? 0.55,
         documentType: rag?.documentType,
       })
+      usedThreshold = retrieval.usedThreshold
 
       ragResults = retrieval.chunks.map((chunk) => ({
         id: chunk.id,
@@ -163,11 +173,47 @@ export async function POST(request: NextRequest) {
         chunkIndex: chunk.chunkIndex,
       }))
       contextMarkdown = retrieval.contextMarkdown
+    }
+
+    try {
+      await runRetrieval()
+
+      if (ragResults.length === 0) {
+        const [pendingQuery, failedQuery] = await Promise.all([
+          supabase
+            .from("ai_agent_kb_sources")
+            .select("id", { count: "exact", head: true })
+            .eq("agent_id", agentId)
+            .in("status", ["pending", "processing"]),
+          supabase
+            .from("ai_agent_kb_sources")
+            .select("id", { count: "exact", head: true })
+            .eq("agent_id", agentId)
+            .eq("status", "failed"),
+        ])
+
+        pendingSources = pendingQuery.count || 0
+        failedSources = failedQuery.count || 0
+
+        if (pendingSources > 0) {
+          await processPendingKbSources({ agentId, limit: 5 }, openaiKey).catch((error) => {
+            console.error("KB follow-up processing failed (admin chat):", error)
+          })
+          await runRetrieval()
+        }
+      }
     } catch (error) {
       console.error("Admin training RAG retrieval error:", error)
     }
 
-    const systemPrompt = `${agent.system_prompt || ""}${
+    const requiresKbGrounding = needsInternalKbGrounding(message)
+    const ragGuardrail = ragResults.length
+      ? `\n\n## REGRAS DE RESPOSTA COM BASE\n- Use prioritariamente os trechos em CONTEXTO RELEVANTE para responder.\n- Não contradiga os trechos recuperados.\n- Quando possível, cite explicitamente o nome da fonte e o trecho.\n- Se faltar detalhe no contexto, diga o que faltou antes de assumir.`
+      : requiresKbGrounding
+        ? `\n\n## REGRAS DE RESPOSTA SEM BASE RECUPERADA\n- Nesta mensagem, nenhum trecho da base indexada foi recuperado.\n- Não invente conteúdo da metodologia/documentos.\n- Informe claramente que não encontrou base suficiente nos documentos indexados para responder com segurança.\n- Sugira reindexar documentos, processar pendentes ou refinar a pergunta.\n- Contexto operacional: pendentes=${pendingSources}, falhas=${failedSources}, threshold=${usedThreshold.toFixed(2)}.`
+        : `\n\n## REGRAS DE RESPOSTA GERAL\n- Para perguntas gerais/conversacionais, responda normalmente.\n- Só sinalize ausência de base quando a pergunta depender de documentos internos.`
+
+    const systemPrompt = `${agent.system_prompt || ""}${ragGuardrail}${
       contextMarkdown
         ? `\n\n## CONTEXTO RELEVANTE\n\n${contextMarkdown}\n\nUse este contexto para responder de forma precisa. Se não for relevante, ignore.`
         : ""
@@ -212,6 +258,13 @@ export async function POST(request: NextRequest) {
                 similarity: doc.similarity,
                 chunk_index: doc.chunkIndex,
               })),
+              rag_status: {
+                chunks: ragResults.length,
+                pending_sources: pendingSources,
+                failed_sources: failedSources,
+                threshold_used: usedThreshold,
+                requires_grounding: requiresKbGrounding,
+              },
             },
           })
 

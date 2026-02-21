@@ -17,6 +17,7 @@ type RetrieveOptions = {
   limit?: number
   similarityThreshold?: number
   documentType?: KbDocType
+  thresholdFallbacks?: number[]
 }
 
 type SearchChunk = {
@@ -46,6 +47,7 @@ export type RetrievedChunk = {
 export type RetrievalResult = {
   chunks: RetrievedChunk[]
   contextMarkdown: string
+  usedThreshold: number
 }
 
 function buildContextMarkdown(chunks: RetrievedChunk[]) {
@@ -93,19 +95,38 @@ export async function retrieveKbContext(
 
   const queryEmbedding = embeddingResponse.data[0].embedding
 
-  const { data: chunkRows, error } = await supabase.rpc("search_ai_agent_kb_chunks", {
-    query_embedding: queryEmbedding,
-    agent_id: options.agentId,
-    similarity_threshold: options.similarityThreshold ?? KB_DEFAULT_RETRIEVAL_THRESHOLD,
-    match_count: Math.max((options.limit ?? KB_DEFAULT_RETRIEVAL_LIMIT) * 4, 24),
-    doc_type: options.documentType ?? null,
-  })
+  const thresholds = [
+    options.similarityThreshold ?? KB_DEFAULT_RETRIEVAL_THRESHOLD,
+    ...(options.thresholdFallbacks ?? [0.45, 0.35]),
+  ]
 
-  if (error) {
-    throw new Error(`Falha na busca de chunks: ${error.message}`)
+  let ranked: SearchChunk[] = []
+  let usedThreshold = thresholds[0]
+  let lastError: string | null = null
+
+  for (const threshold of thresholds) {
+    const { data: chunkRows, error } = await supabase.rpc("search_ai_agent_kb_chunks", {
+      query_embedding: queryEmbedding,
+      agent_id: options.agentId,
+      similarity_threshold: threshold,
+      match_count: Math.max((options.limit ?? KB_DEFAULT_RETRIEVAL_LIMIT) * 4, 24),
+      doc_type: options.documentType ?? null,
+    })
+
+    if (error) {
+      lastError = error.message
+      continue
+    }
+
+    ranked = (chunkRows ?? []) as SearchChunk[]
+    usedThreshold = threshold
+    if (ranked.length > 0) break
   }
 
-  const ranked = (chunkRows ?? []) as SearchChunk[]
+  if (lastError && ranked.length === 0) {
+    throw new Error(`Falha na busca de chunks: ${lastError}`)
+  }
+
   const withDiversity = applySourceDiversity(ranked)
   const withBudget = applyTokenBudget(withDiversity)
   const finalRows = withBudget.slice(0, options.limit ?? KB_DEFAULT_RETRIEVAL_LIMIT)
@@ -124,5 +145,6 @@ export async function retrieveKbContext(
   return {
     chunks,
     contextMarkdown: buildContextMarkdown(chunks),
+    usedThreshold,
   }
 }

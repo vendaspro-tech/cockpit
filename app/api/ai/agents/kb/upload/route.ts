@@ -1,58 +1,22 @@
 import { NextRequest, NextResponse } from "next/server"
 import { z } from "zod"
-import pdfParse from "pdf-parse"
-import { OpenAI } from "openai"
 import { createClient } from "@/lib/supabase/server"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { isSystemOwner } from "@/lib/auth-utils"
+import { enqueueKbSource, processPendingKbSources } from "@/lib/ai/kb/ingestion"
+import { sha256 } from "@/lib/ai/kb/chunking"
+import {
+  isAllowedKbFile,
+  KB_MAX_SIZE_BYTES,
+  resolveKbContentType,
+  sanitizeFileName,
+} from "@/lib/ai/kb/files"
 
 export const runtime = "nodejs"
 
 const UploadSchema = z.object({
   agentId: z.string().uuid(),
 })
-
-const MAX_SIZE_BYTES = 25 * 1024 * 1024
-const ALLOWED_MIME_TYPES = new Set([
-  "text/plain",
-  "text/csv",
-  "application/csv",
-  "text/comma-separated-values",
-  "application/vnd.ms-excel",
-  "application/pdf",
-  "application/octet-stream",
-])
-const ALLOWED_EXTENSIONS = new Set(["pdf", "txt", "csv"])
-
-function sanitizeFileName(name: string) {
-  return name.replace(/[^a-zA-Z0-9._-]/g, "_")
-}
-
-function getExtension(name: string) {
-  const value = name.toLowerCase().split(".").pop()
-  return value || ""
-}
-
-function isAllowedFile(file: File) {
-  const ext = getExtension(file.name)
-  if (!ALLOWED_EXTENSIONS.has(ext)) return false
-  return file.type === "" || ALLOWED_MIME_TYPES.has(file.type)
-}
-
-function resolveContentType(file: File) {
-  const ext = getExtension(file.name)
-  if (ext === "pdf") return "application/pdf"
-  if (ext === "csv") return "text/csv"
-  return "text/plain"
-}
-
-async function extractText(file: File, buffer: Buffer) {
-  if (file.type === "application/pdf" || getExtension(file.name) === "pdf") {
-    const parsed = await pdfParse(buffer)
-    return parsed.text?.trim() || ""
-  }
-  return buffer.toString("utf-8").trim()
-}
 
 export async function POST(request: NextRequest) {
   try {
@@ -79,10 +43,10 @@ export async function POST(request: NextRequest) {
     if (!file || !(file instanceof File)) {
       return NextResponse.json({ error: "Arquivo inválido" }, { status: 400 })
     }
-    if (!isAllowedFile(file)) {
+    if (!isAllowedKbFile(file)) {
       return NextResponse.json({ error: "Tipo de arquivo não suportado" }, { status: 400 })
     }
-    if (file.size > MAX_SIZE_BYTES) {
+    if (file.size > KB_MAX_SIZE_BYTES) {
       return NextResponse.json({ error: "Arquivo acima de 25MB" }, { status: 400 })
     }
 
@@ -92,16 +56,12 @@ export async function POST(request: NextRequest) {
     }
 
     const buffer = Buffer.from(await file.arrayBuffer())
-    const content = await extractText(file, buffer)
-    if (!content) {
-      return NextResponse.json({ error: "Não foi possível extrair texto do arquivo" }, { status: 400 })
-    }
 
     const safeName = sanitizeFileName(file.name)
     const storagePath = `${parsed.data.agentId}/${Date.now()}-${safeName}`
 
     const supabase = createAdminClient()
-    const contentType = resolveContentType(file)
+    const contentType = resolveKbContentType(file)
     const { error: uploadError } = await supabase.storage
       .from("ai-agent-kb-files")
       .upload(storagePath, buffer, { contentType, upsert: false })
@@ -111,40 +71,41 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Erro ao subir arquivo" }, { status: 500 })
     }
 
-    const openai = new OpenAI({ apiKey: openaiKey })
-    const embeddingResponse = await openai.embeddings.create({
-      model: "text-embedding-3-small",
-      input: content,
+    const { source, deduplicated } = await enqueueKbSource({
+      agentId: parsed.data.agentId,
+      title: file.name,
+      type: "document",
+      filename: file.name,
+      mimeType: contentType,
+      sizeBytes: file.size,
+      storagePath,
+      checksum: sha256(buffer),
+      metadata: {
+        source: "file_upload",
+      },
     })
-    const embedding = embeddingResponse.data[0]?.embedding
 
-    const { data: document, error: insertError } = await supabase
-      .from("ai_agent_knowledge_base")
-      .insert({
-        agent_id: parsed.data.agentId,
-        title: file.name,
-        content,
-        type: "document",
-        embedding,
-        metadata: {
-          indexed_at: new Date().toISOString(),
-          content_length: content.length,
-          source: "file_upload",
-        },
-        filename: file.name,
-        mime_type: contentType,
-        size_bytes: file.size,
-        storage_path: storagePath,
-      })
-      .select("*")
-      .single()
-
-    if (insertError || !document) {
-      console.error("KB insert error:", insertError)
-      return NextResponse.json({ error: "Erro ao salvar documento" }, { status: 500 })
+    if (deduplicated) {
+      await supabase.storage.from("ai-agent-kb-files").remove([storagePath])
     }
 
-    return NextResponse.json({ success: true, document })
+    // Best-effort asynchronous kickoff for this source.
+    void processPendingKbSources({ sourceId: source.id, limit: 1 }, openaiKey).catch((error) => {
+      console.error("KB async processing kickoff failed:", error)
+    })
+
+    return NextResponse.json({
+      success: true,
+      source: {
+        id: source.id,
+        title: source.title,
+        status: source.status,
+        filename: source.filename,
+        size_bytes: source.size_bytes,
+        created_at: source.created_at,
+      },
+      deduplicated,
+    })
   } catch (error) {
     console.error("KB upload route error:", error)
     return NextResponse.json({ error: "Erro ao processar upload" }, { status: 500 })

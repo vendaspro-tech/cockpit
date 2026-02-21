@@ -32,7 +32,7 @@ export async function DELETE(request: NextRequest) {
 
     const supabase = createAdminClient()
     const { data: existing, error: existingError } = await supabase
-      .from("ai_agent_knowledge_base")
+      .from("ai_agent_kb_sources")
       .select("storage_path")
       .eq("id", parsed.data.documentId)
       .eq("agent_id", parsed.data.agentId)
@@ -43,7 +43,7 @@ export async function DELETE(request: NextRequest) {
     }
 
     const { error: deleteError } = await supabase
-      .from("ai_agent_knowledge_base")
+      .from("ai_agent_kb_sources")
       .delete()
       .eq("id", parsed.data.documentId)
       .eq("agent_id", parsed.data.agentId)

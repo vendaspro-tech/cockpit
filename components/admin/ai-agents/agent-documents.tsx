@@ -134,7 +134,7 @@ export function AgentDocuments({ agentId, documents }: AgentDocumentsProps) {
     try {
       const result = await updateAgentDocument(agentId, editing.id, {
         title: editing.title,
-        content: editing.content,
+        content: editing.content || "",
         type: editing.type as AgentDocumentType,
         sourceUrl: editing.source_url ?? "",
       })
@@ -159,6 +159,43 @@ export function AgentDocuments({ agentId, documents }: AgentDocumentsProps) {
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-8">
+        <div className="flex justify-end">
+          <Button
+            variant="secondary"
+            disabled={uploading}
+            onClick={async () => {
+              setUploading(true)
+              try {
+                const response = await fetch("/api/ai/agents/kb/process-pending", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ agentId }),
+                })
+                const result = await response.json()
+                if (!response.ok) {
+                  toast({
+                    title: "Erro",
+                    description: result.error || "Falha ao processar pendências",
+                    variant: "destructive",
+                  })
+                  return
+                }
+                toast({
+                  title: "Processamento concluído",
+                  description: `${result.succeeded || 0} fonte(s) processada(s).`,
+                })
+                router.refresh()
+              } catch {
+                toast({ title: "Erro", description: "Falha ao processar pendências.", variant: "destructive" })
+              } finally {
+                setUploading(false)
+              }
+            }}
+          >
+            Processar Pendentes
+          </Button>
+        </div>
+
         <div className="space-y-3 rounded-lg border p-4">
           <div>
             <h4 className="font-medium">Upload de Arquivos (PDF, TXT, CSV)</h4>
@@ -243,12 +280,16 @@ export function AgentDocuments({ agentId, documents }: AgentDocumentsProps) {
               <div className="space-y-1">
                 <p className="font-semibold">{doc.title}</p>
                 <p className="text-xs text-muted-foreground">
-                  {doc.type} • {doc.metadata?.content_length || doc.content.length} caracteres
+                  {doc.type} • {doc.chunk_count} chunks • status: {doc.status}
                 </p>
+                {doc.error_message ? (
+                  <p className="text-xs text-destructive">{doc.error_message}</p>
+                ) : null}
                 <div className="flex flex-wrap gap-1">
                   <Badge variant={doc.filename ? "secondary" : "outline"}>
                     {doc.filename ? "Arquivo" : "Manual"}
                   </Badge>
+                  <Badge variant="outline">{doc.status}</Badge>
                   {doc.filename && <Badge variant="outline">{doc.filename}</Badge>}
                   {doc.size_bytes ? (
                     <Badge variant="outline">{Math.ceil(doc.size_bytes / 1024)} KB</Badge>
@@ -259,10 +300,10 @@ export function AgentDocuments({ agentId, documents }: AgentDocumentsProps) {
                 {doc.filename && (
                   <>
                     <Label htmlFor={`replace-${doc.id}`} className="w-fit cursor-pointer">
-                      <Button asChild variant="outline" size="sm" disabled={uploading}>
-                        <span>Substituir arquivo</span>
-                      </Button>
-                    </Label>
+                    <Button asChild variant="outline" size="sm" disabled={uploading}>
+                      <span>Substituir arquivo</span>
+                    </Button>
+                  </Label>
                     <Input
                       id={`replace-${doc.id}`}
                       type="file"
@@ -272,9 +313,46 @@ export function AgentDocuments({ agentId, documents }: AgentDocumentsProps) {
                     />
                   </>
                 )}
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  disabled={uploading}
+                  onClick={async () => {
+                    setUploading(true)
+                    try {
+                      const response = await fetch("/api/ai/agents/kb/reindex", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ sourceId: doc.id }),
+                      })
+                      const result = await response.json()
+                      if (!response.ok) {
+                        toast({
+                          title: "Erro",
+                          description: result.error || "Falha ao reindexar",
+                          variant: "destructive",
+                        })
+                        return
+                      }
+                      toast({ title: "Reindexação concluída", description: "Fonte processada com sucesso." })
+                      router.refresh()
+                    } catch {
+                      toast({ title: "Erro", description: "Falha ao reindexar.", variant: "destructive" })
+                    } finally {
+                      setUploading(false)
+                    }
+                  }}
+                >
+                  Reindexar
+                </Button>
                 <Dialog>
                   <DialogTrigger asChild>
-                    <Button variant="outline" size="sm" onClick={() => setEditing(doc)} disabled={!!doc.filename}>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setEditing(doc)}
+                      disabled={!!doc.filename || !doc.content}
+                    >
                       Editar
                     </Button>
                   </DialogTrigger>
@@ -312,7 +390,7 @@ export function AgentDocuments({ agentId, documents }: AgentDocumentsProps) {
                         <div className="space-y-2">
                           <Label>Conteúdo</Label>
                           <Textarea
-                            value={editing.content}
+                            value={editing.content || ""}
                             onChange={(e) => setEditing({ ...editing, content: e.target.value })}
                             rows={6}
                           />

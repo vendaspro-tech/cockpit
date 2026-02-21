@@ -4,6 +4,8 @@ import { createClient } from "@/lib/supabase/server"
 import { ensureSupabaseUser } from "@/lib/supabase/user"
 import { OpenAI } from "openai"
 import { getSystemSettings } from "@/app/actions/admin/settings"
+import { retrieveKbContext } from "@/lib/ai/kb/retrieval"
+import { processPendingKbSources } from "@/lib/ai/kb/ingestion"
 
 export const runtime = "nodejs"
 
@@ -14,7 +16,7 @@ const ChatRequestSchema = z.object({
   message: z.string().min(1).max(8000),
   rag: z
     .object({
-      limit: z.number().min(1).max(10).optional(),
+      limit: z.number().min(1).max(20).optional(),
       similarityThreshold: z.number().min(0.1).max(0.95).optional(),
       documentType: z.enum(["transcript", "pdi", "assessment", "document", "image_extracted"]).optional(),
     })
@@ -131,26 +133,39 @@ export async function POST(request: NextRequest) {
       (settings?.model && settings.provider === "openai" ? settings.model : "gpt-4o-mini")
     const openai = new OpenAI({ apiKey: openaiKey })
 
-    const embeddingResponse = await openai.embeddings.create({
-      model: "text-embedding-3-small",
-      input: message,
+    await processPendingKbSources({ agentId, limit: 1 }, openaiKey).catch((error) => {
+      console.error("KB opportunistic processing failed:", error)
     })
 
-    const queryEmbedding = embeddingResponse.data[0].embedding
+    let ragResults: Array<{
+      id: string
+      title: string
+      type: string
+      similarity: number
+      content: string
+      chunkIndex: number
+    }> = []
+    let contextMarkdown = ""
 
-    const { data: ragResults, error: ragError } = await supabase.rpc(
-      "search_ai_agent_knowledge_base",
-      {
-        query_embedding: queryEmbedding,
-        agent_id: agentId,
-        similarity_threshold: rag?.similarityThreshold ?? 0.7,
-        match_count: rag?.limit ?? 5,
-        doc_type: rag?.documentType ?? null,
-      }
-    )
-
-    if (ragError) {
-      console.error("RAG error:", ragError)
+    try {
+      const retrieval = await retrieveKbContext(supabase, openai, {
+        query: message,
+        agentId,
+        limit: rag?.limit ?? 12,
+        similarityThreshold: rag?.similarityThreshold ?? 0.68,
+        documentType: rag?.documentType,
+      })
+      ragResults = retrieval.chunks.map((chunk) => ({
+        id: chunk.id,
+        title: chunk.title,
+        type: chunk.type,
+        similarity: chunk.similarity,
+        content: chunk.content,
+        chunkIndex: chunk.chunkIndex,
+      }))
+      contextMarkdown = retrieval.contextMarkdown
+    } catch (error) {
+      console.error("RAG chunk retrieval error:", error)
     }
 
     const { data: attachments, error: attachmentsError } = await supabase
@@ -171,13 +186,6 @@ export async function POST(request: NextRequest) {
         const preview = text.length > 4000 ? `${text.slice(0, 4000)}...` : text
         return `**[ANEXO] ${att.filename}**\n${preview}`
       })
-      .join("\n\n---\n\n")
-
-    const contextMarkdown = (ragResults ?? [])
-      .map(
-        (doc: any) =>
-          `**[${String(doc.type).toUpperCase()}] ${doc.title}** (Relevância: ${(doc.similarity * 100).toFixed(0)}%)\n${doc.content}`
-      )
       .join("\n\n---\n\n")
 
     const systemPrompt = `${agent.system_prompt || ""}${
@@ -213,11 +221,12 @@ export async function POST(request: NextRequest) {
         metadata: {
           model,
           usage: completion.usage ?? null,
-          rag_documents: (ragResults ?? []).map((doc: any) => ({
+          rag_documents: ragResults.map((doc) => ({
             id: doc.id,
             title: doc.title,
             type: doc.type,
             similarity: doc.similarity,
+            chunk_index: doc.chunkIndex,
           })),
         },
       })
@@ -235,7 +244,7 @@ export async function POST(request: NextRequest) {
       success: true,
       conversationId: resolvedConversationId,
       message: assistantText,
-      ragCount: (ragResults ?? []).length,
+      ragCount: ragResults.length,
     })
   } catch (error) {
     console.error("Chat error:", error)

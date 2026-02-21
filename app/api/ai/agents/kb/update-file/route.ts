@@ -1,10 +1,16 @@
 import { NextRequest, NextResponse } from "next/server"
 import { z } from "zod"
-import pdfParse from "pdf-parse"
-import { OpenAI } from "openai"
 import { createClient } from "@/lib/supabase/server"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { isSystemOwner } from "@/lib/auth-utils"
+import { processPendingKbSources } from "@/lib/ai/kb/ingestion"
+import { sha256 } from "@/lib/ai/kb/chunking"
+import {
+  isAllowedKbFile,
+  KB_MAX_SIZE_BYTES,
+  resolveKbContentType,
+  sanitizeFileName,
+} from "@/lib/ai/kb/files"
 
 export const runtime = "nodejs"
 
@@ -12,48 +18,6 @@ const UpdateSchema = z.object({
   agentId: z.string().uuid(),
   documentId: z.string().uuid(),
 })
-
-const MAX_SIZE_BYTES = 25 * 1024 * 1024
-const ALLOWED_MIME_TYPES = new Set([
-  "text/plain",
-  "text/csv",
-  "application/csv",
-  "text/comma-separated-values",
-  "application/vnd.ms-excel",
-  "application/pdf",
-  "application/octet-stream",
-])
-const ALLOWED_EXTENSIONS = new Set(["pdf", "txt", "csv"])
-
-function sanitizeFileName(name: string) {
-  return name.replace(/[^a-zA-Z0-9._-]/g, "_")
-}
-
-function getExtension(name: string) {
-  const value = name.toLowerCase().split(".").pop()
-  return value || ""
-}
-
-function isAllowedFile(file: File) {
-  const ext = getExtension(file.name)
-  if (!ALLOWED_EXTENSIONS.has(ext)) return false
-  return file.type === "" || ALLOWED_MIME_TYPES.has(file.type)
-}
-
-function resolveContentType(file: File) {
-  const ext = getExtension(file.name)
-  if (ext === "pdf") return "application/pdf"
-  if (ext === "csv") return "text/csv"
-  return "text/plain"
-}
-
-async function extractText(file: File, buffer: Buffer) {
-  if (file.type === "application/pdf" || getExtension(file.name) === "pdf") {
-    const parsed = await pdfParse(buffer)
-    return parsed.text?.trim() || ""
-  }
-  return buffer.toString("utf-8").trim()
-}
 
 export async function POST(request: NextRequest) {
   try {
@@ -79,10 +43,10 @@ export async function POST(request: NextRequest) {
     if (!file || !(file instanceof File)) {
       return NextResponse.json({ error: "Arquivo inválido" }, { status: 400 })
     }
-    if (!isAllowedFile(file)) {
+    if (!isAllowedKbFile(file)) {
       return NextResponse.json({ error: "Tipo de arquivo não suportado" }, { status: 400 })
     }
-    if (file.size > MAX_SIZE_BYTES) {
+    if (file.size > KB_MAX_SIZE_BYTES) {
       return NextResponse.json({ error: "Arquivo acima de 25MB" }, { status: 400 })
     }
 
@@ -93,7 +57,7 @@ export async function POST(request: NextRequest) {
 
     const supabase = createAdminClient()
     const { data: existing, error: existingError } = await supabase
-      .from("ai_agent_knowledge_base")
+      .from("ai_agent_kb_sources")
       .select("id, storage_path")
       .eq("id", parsed.data.documentId)
       .eq("agent_id", parsed.data.agentId)
@@ -104,14 +68,10 @@ export async function POST(request: NextRequest) {
     }
 
     const buffer = Buffer.from(await file.arrayBuffer())
-    const content = await extractText(file, buffer)
-    if (!content) {
-      return NextResponse.json({ error: "Não foi possível extrair texto do arquivo" }, { status: 400 })
-    }
 
     const safeName = sanitizeFileName(file.name)
     const storagePath = `${parsed.data.agentId}/${Date.now()}-${safeName}`
-    const contentType = resolveContentType(file)
+    const contentType = resolveKbContentType(file)
 
     const { error: uploadError } = await supabase.storage
       .from("ai-agent-kb-files")
@@ -121,29 +81,31 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Erro ao subir arquivo" }, { status: 500 })
     }
 
-    const openai = new OpenAI({ apiKey: openaiKey })
-    const embeddingResponse = await openai.embeddings.create({
-      model: "text-embedding-3-small",
-      input: content,
-    })
-    const embedding = embeddingResponse.data[0]?.embedding
+    const { error: deleteOldChunksError } = await supabase
+      .from("ai_agent_kb_chunks")
+      .delete()
+      .eq("source_id", parsed.data.documentId)
+    if (deleteOldChunksError) {
+      console.error("KB delete old chunks error:", deleteOldChunksError)
+    }
 
-    const { data: updated, error: updateError } = await supabase
-      .from("ai_agent_knowledge_base")
+    const { data: updated, error: updateSourceError } = await supabase
+      .from("ai_agent_kb_sources")
       .update({
         title: file.name,
-        content,
         type: "document",
-        embedding,
-        metadata: {
-          indexed_at: new Date().toISOString(),
-          content_length: content.length,
-          source: "file_upload",
-        },
         filename: file.name,
         mime_type: contentType,
         size_bytes: file.size,
         storage_path: storagePath,
+        inline_content: null,
+        checksum_sha256: sha256(buffer),
+        status: "pending",
+        error_message: null,
+        metadata: {
+          source: "file_upload",
+          reindex_requested_at: new Date().toISOString(),
+        },
         updated_at: new Date().toISOString(),
       })
       .eq("id", parsed.data.documentId)
@@ -151,8 +113,8 @@ export async function POST(request: NextRequest) {
       .select("*")
       .single()
 
-    if (updateError || !updated) {
-      console.error("KB update error:", updateError)
+    if (updateSourceError || !updated) {
+      console.error("KB update source error:", updateSourceError)
       return NextResponse.json({ error: "Erro ao atualizar documento" }, { status: 500 })
     }
 
@@ -160,7 +122,18 @@ export async function POST(request: NextRequest) {
       await supabase.storage.from("ai-agent-kb-files").remove([existing.storage_path])
     }
 
-    return NextResponse.json({ success: true, document: updated })
+    void processPendingKbSources({ sourceId: updated.id, limit: 1 }, openaiKey).catch((error) => {
+      console.error("KB async reprocess kickoff failed:", error)
+    })
+
+    return NextResponse.json({
+      success: true,
+      source: {
+        id: updated.id,
+        title: updated.title,
+        status: updated.status,
+      },
+    })
   } catch (error) {
     console.error("KB update route error:", error)
     return NextResponse.json({ error: "Erro ao substituir arquivo" }, { status: 500 })

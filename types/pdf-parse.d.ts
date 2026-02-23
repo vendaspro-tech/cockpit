@@ -1,6 +1,3 @@
-<<<<<<< HEAD
-declare module "pdf-parse";
-=======
 declare module 'pdf-parse' {
   export interface PDFParseResult {
     numpages: number
@@ -13,4 +10,3 @@ declare module 'pdf-parse' {
 
   export default function pdfParse(dataBuffer: Buffer | Uint8Array | ArrayBuffer): Promise<PDFParseResult>
 }
->>>>>>> origin/develop

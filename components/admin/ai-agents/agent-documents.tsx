@@ -25,25 +25,12 @@ type AgentDocumentsProps = {
   documents: AdminAgentDocument[]
 }
 
-<<<<<<< HEAD
 type AgentDocumentFormInput = Omit<AgentDocumentInput, "sourceUrl"> & { sourceUrl: string }
 
 const emptyDoc: AgentDocumentFormInput = {
-=======
-type AgentDocumentType = "transcript" | "pdi" | "assessment" | "document" | "image_extracted"
-
-type AgentDocumentDraft = {
-  title: string
-  content: string
-  type: AgentDocumentType
-  sourceUrl: string
-}
-
-const emptyDoc = {
->>>>>>> origin/develop
   title: "",
   content: "",
-  type: "document" as AgentDocumentType,
+  type: "document" as AgentDocumentInput["type"],
   sourceUrl: "",
 }
 
@@ -51,23 +38,16 @@ export function AgentDocuments({ agentId, documents }: AgentDocumentsProps) {
   const { toast } = useToast()
   const router = useRouter()
   const [loading, setLoading] = useState(false)
-<<<<<<< HEAD
   const [draft, setDraft] = useState<AgentDocumentFormInput>({ ...emptyDoc })
-=======
   const [uploading, setUploading] = useState(false)
-  const [draft, setDraft] = useState<AgentDocumentDraft>({ ...emptyDoc })
->>>>>>> origin/develop
+  const [draft, setDraft] = useState<AgentDocumentFormInput>({ ...emptyDoc })
   const [editing, setEditing] = useState<AdminAgentDocument | null>(null)
 
   const handleCreate = async () => {
     setLoading(true)
     try {
       const result = await createAgentDocument(agentId, draft)
-<<<<<<< HEAD
-      if ("error" in result) {
-=======
       if (result && "error" in result) {
->>>>>>> origin/develop
         toast({ title: "Erro", description: result.error, variant: "destructive" })
       } else {
         toast({ title: "Documento adicionado", description: "O documento foi indexado com sucesso." })
@@ -84,11 +64,7 @@ export function AgentDocuments({ agentId, documents }: AgentDocumentsProps) {
     if (!confirmed) return
 
     const result = await deleteAgentDocument(agentId, docId)
-<<<<<<< HEAD
-    if ("error" in result) {
-=======
     if (result && "error" in result) {
->>>>>>> origin/develop
       toast({ title: "Erro", description: result.error, variant: "destructive" })
     } else {
       toast({ title: "Documento excluído", description: "Documento removido." })
@@ -153,19 +129,11 @@ export function AgentDocuments({ agentId, documents }: AgentDocumentsProps) {
     try {
       const result = await updateAgentDocument(agentId, editing.id, {
         title: editing.title,
-<<<<<<< HEAD
-        content: editing.content,
-        type: editing.type,
-        sourceUrl: editing.source_url ?? "",
-      })
-      if ("error" in result) {
-=======
         content: editing.content || "",
-        type: editing.type as AgentDocumentType,
+        type: editing.type as AgentDocumentInput["type"],
         sourceUrl: editing.source_url ?? "",
       })
       if (result && "error" in result) {
->>>>>>> origin/develop
         toast({ title: "Erro", description: result.error, variant: "destructive" })
       } else {
         toast({ title: "Documento atualizado", description: "Documento reindexado com sucesso." })
@@ -259,13 +227,9 @@ export function AgentDocuments({ agentId, documents }: AgentDocumentsProps) {
             <Label>Tipo</Label>
             <Select
               value={draft.type}
-<<<<<<< HEAD
               onValueChange={(value) =>
                 setDraft({ ...draft, type: value as AgentDocumentInput["type"] })
               }
-=======
-              onValueChange={(value) => setDraft({ ...draft, type: value as AgentDocumentType })}
->>>>>>> origin/develop
             >
               <SelectTrigger>
                 <SelectValue placeholder="Tipo" />

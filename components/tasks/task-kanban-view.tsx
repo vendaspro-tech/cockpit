@@ -10,7 +10,6 @@ import { updateStandaloneTask, duplicateTask, deleteStandaloneTask, updateExecut
 import { updatePDIActionStatus } from "@/app/actions/pdi"
 import { toast } from "sonner"
 import { useState } from "react"
-import type { DragEvent } from "react"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -223,15 +222,8 @@ export function TaskKanbanView({ tasks }: TaskKanbanViewProps) {
   const [showPDI, setShowPDI] = useState(true)
   const [showStandalone, setShowStandalone] = useState(true)
   const [showCompleted, setShowCompleted] = useState(true)
-<<<<<<< HEAD
-  const [activeTask, setActiveTask] = useState<UnifiedTask | null>(null)
-  const [startInEdit, setStartInEdit] = useState(false)
-  const [draggingTaskId, setDraggingTaskId] = useState<string | null>(null)
-  const [dragOverColumn, setDragOverColumn] = useState<string | null>(null)
-=======
   const [editingTask, setEditingTask] = useState<UnifiedTask | null>(null)
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }))
->>>>>>> origin/develop
 
   const filteredTasks = optimisticTasks.filter(task => {
     if (!showPDI && task.type === 'pdi_action') return false
@@ -270,31 +262,6 @@ export function TaskKanbanView({ tasks }: TaskKanbanViewProps) {
     }
   }
 
-  const handleDragStart = (event: DragEvent<HTMLDivElement>, task: UnifiedTask) => {
-    event.dataTransfer.setData('text/plain', task.id)
-    event.dataTransfer.effectAllowed = 'move'
-    setDraggingTaskId(task.id)
-  }
-
-  const handleDragEnd = () => {
-    setDraggingTaskId(null)
-    setDragOverColumn(null)
-  }
-
-  const handleDragOver = (event: DragEvent<HTMLDivElement>, columnId: string) => {
-    event.preventDefault()
-    setDragOverColumn(columnId)
-  }
-
-  const handleDrop = (event: DragEvent<HTMLDivElement>, columnId: 'todo' | 'in_progress' | 'done') => {
-    event.preventDefault()
-    const taskId = event.dataTransfer.getData('text/plain')
-    const task = optimisticTasks.find(t => t.id === taskId)
-    setDragOverColumn(null)
-    if (!task) return
-    void handleStatusChange(task, columnId)
-  }
-
   const handleDuplicate = async (task: UnifiedTask) => {
     if (task.type !== 'standalone_task') {
       toast.error('Apenas tarefas avulsas podem ser duplicadas no momento.')
@@ -327,16 +294,7 @@ export function TaskKanbanView({ tasks }: TaskKanbanViewProps) {
     }
   }
 
-<<<<<<< HEAD
-  const openTaskDialog = (task: UnifiedTask, edit = false) => {
-    setActiveTask(task)
-    setStartInEdit(edit)
-  }
-
-  const columns = [
-=======
   const columns: Array<{ id: TaskStatus; title: string; color: string }> = [
->>>>>>> origin/develop
     { id: 'todo', title: 'A Fazer', color: 'bg-muted text-muted-foreground' },
     { id: 'in_progress', title: 'Em Progresso', color: 'bg-blue-500/10 text-blue-600 dark:text-blue-400' },
     { id: 'done', title: 'Concluído', color: 'bg-green-500/10 text-green-600 dark:text-green-400' }
@@ -375,100 +333,6 @@ export function TaskKanbanView({ tasks }: TaskKanbanViewProps) {
           setShowCompleted={setShowCompleted}
         />
       </div>
-<<<<<<< HEAD
-      
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 h-[calc(100vh-250px)] overflow-hidden">
-        {columns.map(column => (
-          <div key={column.id} className="flex flex-col h-full bg-muted/30 rounded-xl border border-border">
-            <div className="p-4 border-b border-border flex items-center justify-between bg-card/50 backdrop-blur-sm rounded-t-xl">
-              <div className="flex items-center gap-2">
-                <span className={cn("w-2 h-2 rounded-full", 
-                  column.id === 'todo' ? "bg-muted-foreground" : 
-                  column.id === 'in_progress' ? "bg-blue-500" : "bg-green-500"
-                )} />
-                <h3 className="font-semibold text-sm text-foreground">{column.title}</h3>
-              </div>
-              <Badge variant="secondary" className="bg-background border shadow-sm">
-                {filteredTasks.filter(t => t.status === column.id).length}
-              </Badge>
-            </div>
-            
-            <div
-              className={cn(
-                "flex-1 overflow-y-auto p-3 space-y-3 transition-colors",
-                dragOverColumn === column.id ? "bg-muted/40" : ""
-              )}
-              onDragOver={(event) => handleDragOver(event, column.id)}
-              onDragLeave={() => setDragOverColumn(null)}
-              onDrop={(event) => handleDrop(event, column.id as 'todo' | 'in_progress' | 'done')}
-            >
-              {filteredTasks
-                .filter(task => task.status === column.id)
-                .map(task => (
-                <div
-                  key={task.id}
-                  className={cn(
-                    "bg-card p-3 rounded-lg border shadow-sm hover:shadow-md transition-all group",
-                    draggingTaskId === task.id ? "opacity-60" : "cursor-grab active:cursor-grabbing"
-                  )}
-                  draggable
-                  onDragStart={(event) => handleDragStart(event, task)}
-                  onDragEnd={handleDragEnd}
-                  onClick={() => openTaskDialog(task)}
-                >
-                  <div className="flex items-start justify-between gap-2 mb-2">
-                    <span className={cn(
-                      "text-xs font-medium px-1.5 py-0.5 rounded border",
-                      task.type === 'pdi_action' 
-                        ? "bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/20" 
-                        : "bg-muted text-muted-foreground border-border"
-                    )}>
-                      {task.type === 'pdi_action' ? 'PDI' : 'Tarefa'}
-                    </span>
-                    
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-6 w-6 -mr-1 opacity-0 group-hover:opacity-100 transition-opacity"
-                          onClick={(event) => event.stopPropagation()}
-                        >
-                          <MoreHorizontal className="w-4 h-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={() => handleStatusChange(task, 'todo')}>
-                          Mover para A Fazer
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => handleStatusChange(task, 'in_progress')}>
-                          Mover para Em Progresso
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => handleStatusChange(task, 'done')}>
-                          Mover para Concluído
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => openTaskDialog(task, true)}>
-                          <Pencil className="mr-2 h-4 w-4" />
-                          Editar
-                        </DropdownMenuItem>
-                        {task.type === 'standalone_task' && (
-                          <>
-                            <DropdownMenuItem onClick={() => handleDuplicate(task)}>
-                              <Copy className="mr-2 h-4 w-4" />
-                              Duplicar
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => handleDelete(task)} className="text-red-600 focus:text-red-600">
-                              <Trash2 className="mr-2 h-4 w-4" />
-                              Excluir
-                            </DropdownMenuItem>
-                          </>
-                        )}
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </div>
-=======
->>>>>>> origin/develop
-
       <DndContext
         sensors={sensors}
         collisionDetection={closestCenter}
@@ -490,12 +354,11 @@ export function TaskKanbanView({ tasks }: TaskKanbanViewProps) {
         </div>
       </DndContext>
 
-      {activeTask && (
+      {editingTask && (
         <EditTaskDialog 
-          task={activeTask} 
-          open={!!activeTask} 
-          startInEdit={startInEdit}
-          onOpenChange={(open) => !open && setActiveTask(null)} 
+          task={editingTask}
+          open={!!editingTask}
+          onOpenChange={(open) => !open && setEditingTask(null)}
         />
       )}
     </div>

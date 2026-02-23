@@ -55,13 +55,8 @@ export type AdminAgentDocument = {
   id: string
   agent_id: string
   title: string
-<<<<<<< HEAD
-  content: string
-  type: AgentDocumentType
-=======
   content: string | null
   type: string
->>>>>>> origin/develop
   source_url: string | null
   filename: string | null
   mime_type: string | null
@@ -75,9 +70,7 @@ export type AdminAgentDocument = {
   metadata: Record<string, any>
 }
 
-<<<<<<< HEAD
 async function requireSystemOwner(): Promise<ActionError | { userId: string }> {
-=======
 function normalizeTags(tags: string[]) {
   const seen = new Set<string>()
   const normalized: string[] = []
@@ -92,8 +85,7 @@ function normalizeTags(tags: string[]) {
   return normalized
 }
 
-async function requireSystemOwner() {
->>>>>>> origin/develop
+async function requireSystemOwner(): Promise<ActionError | { userId: string }> {
   const user = await getAuthUser()
   if (!user) return { error: "Não autorizado" }
   const owner = await isSystemOwner(user.id)

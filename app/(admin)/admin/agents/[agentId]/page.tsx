@@ -4,8 +4,11 @@ import { isSystemOwner } from "@/lib/auth-utils"
 import { AgentForm } from "@/components/admin/ai-agents/agent-form"
 import { AgentDocuments } from "@/components/admin/ai-agents/agent-documents"
 import { AgentConversations } from "@/components/admin/ai-agents/agent-conversations"
+import { AgentTrainingChat } from "@/components/admin/ai-agents/agent-training-chat"
 import {
   getAdminAgentById,
+  getAdminTrainingMessages,
+  getAgentTrainingConversationsAdmin,
   getAgentDocuments,
   getAgentConversationsAdmin,
 } from "@/app/actions/admin/ai-agents"
@@ -22,11 +25,17 @@ export default async function AdminAgentPage({ params }: AdminAgentPageProps) {
   const owner = await isSystemOwner(user.id)
   if (!owner) redirect("/")
 
-  const [agent, documents, conversations] = await Promise.all([
+  const [agent, documents, conversations, trainingConversations] = await Promise.all([
     getAdminAgentById(agentId),
     getAgentDocuments(agentId),
     getAgentConversationsAdmin(agentId),
+    getAgentTrainingConversationsAdmin(agentId),
   ])
+
+  const initialTrainingConversationId = trainingConversations[0]?.id ?? null
+  const initialTrainingMessages = initialTrainingConversationId
+    ? await getAdminTrainingMessages(initialTrainingConversationId)
+    : []
 
   if (!agent) {
     redirect("/admin/agents")
@@ -42,6 +51,13 @@ export default async function AdminAgentPage({ params }: AdminAgentPageProps) {
       </div>
 
       <AgentForm mode="edit" agentId={agentId} initial={agent} />
+      <AgentTrainingChat
+        agentId={agentId}
+        agentName={agent.name}
+        initialConversations={trainingConversations}
+        initialConversationId={initialTrainingConversationId}
+        initialMessages={initialTrainingMessages}
+      />
       <AgentDocuments agentId={agentId} documents={documents} />
       <AgentConversations conversations={conversations} />
     </div>

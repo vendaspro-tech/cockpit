@@ -11,6 +11,8 @@ export type AgentCard = {
   name: string
   description: string | null
   status: "active" | "inactive"
+  product_tags: string[]
+  category_tags: string[]
 }
 
 export type ConversationSummary = {
@@ -44,7 +46,7 @@ export async function getActiveAgents(): Promise<AgentCard[]> {
   const supabase = await createClient()
   const { data, error } = await supabase
     .from("ai_agents")
-    .select("id, name, description, status")
+    .select("id, name, description, status, product_tags, category_tags")
     .eq("status", "active")
     .order("created_at", { ascending: false })
 
@@ -60,7 +62,7 @@ export async function getAgent(agentId: string) {
   const supabase = await createClient()
   const { data, error } = await supabase
     .from("ai_agents")
-    .select("id, name, description, system_prompt, status")
+    .select("id, name, description, system_prompt, status, product_tags, category_tags")
     .eq("id", agentId)
     .single()
 

@@ -18,6 +18,7 @@ export interface UnifiedTask {
     pdi_item_id?: string
     category?: string
     pdi_title?: string
+    pdi_criterion?: string
     // Strategic cycle specific
     cycle_id?: string
     cycle_name?: string
@@ -32,4 +33,3 @@ export interface CreateTaskInput {
   due_date?: string
   status?: TaskStatus
 }
-

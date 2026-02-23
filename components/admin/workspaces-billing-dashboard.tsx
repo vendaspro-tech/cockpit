@@ -6,7 +6,12 @@ import { ptBR } from "date-fns/locale"
 import { DollarSign, CreditCard, Users, Activity, Search, Filter } from "lucide-react"
 
 import { SubscriptionItem, SubscriptionStats } from "@/app/actions/admin/subscriptions"
-import { deleteWorkspace, updateWorkspacePlan, updateWorkspaceStatus } from "@/app/actions/admin/workspaces"
+import {
+  deleteWorkspace,
+  updateWorkspaceLeaderCopilot,
+  updateWorkspacePlan,
+  updateWorkspaceStatus,
+} from "@/app/actions/admin/workspaces"
 import { useToast } from "@/hooks/use-toast"
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -28,6 +33,7 @@ import {
 } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { Switch } from "@/components/ui/switch"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -64,6 +70,7 @@ export function WorkspacesBillingDashboard({
   const [dateTo, setDateTo] = useState("")
   const [isUpdating, setIsUpdating] = useState<string | null>(null)
   const [statusUpdating, setStatusUpdating] = useState<string | null>(null)
+  const [copilotUpdating, setCopilotUpdating] = useState<string | null>(null)
   const normalizedPlans = useMemo(
     () =>
       availablePlans.map((label) => ({
@@ -170,6 +177,27 @@ export function WorkspacesBillingDashboard({
       toast({
         title: "Workspace excluído",
         description: "Workspace removido com sucesso.",
+      })
+    }
+  }
+
+  const handleToggleLeaderCopilot = async (workspaceId: string, enabled: boolean) => {
+    setCopilotUpdating(workspaceId)
+    const result = await updateWorkspaceLeaderCopilot(workspaceId, enabled)
+    setCopilotUpdating(null)
+
+    if (result.error) {
+      toast({
+        variant: "destructive",
+        title: "Erro ao atualizar Copiloto",
+        description: result.error,
+      })
+    } else {
+      toast({
+        title: "Permissão atualizada",
+        description: enabled
+          ? "Copiloto do Líder ativado para o workspace."
+          : "Copiloto do Líder desativado para o workspace.",
       })
     }
   }
@@ -338,6 +366,7 @@ export function WorkspacesBillingDashboard({
               <TableHead>Dono</TableHead>
               <TableHead>Plano</TableHead>
               <TableHead>Status</TableHead>
+              <TableHead>Copiloto Líder</TableHead>
               <TableHead>Membros</TableHead>
               <TableHead>Criado em</TableHead>
               <TableHead>Cancelamento</TableHead>
@@ -347,7 +376,7 @@ export function WorkspacesBillingDashboard({
           <TableBody>
             {filteredItems.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={8} className="h-24 text-center">
+                <TableCell colSpan={9} className="h-24 text-center">
                   Nenhum workspace encontrado.
                 </TableCell>
               </TableRow>
@@ -385,6 +414,21 @@ export function WorkspacesBillingDashboard({
                           ? "Suspenso"
                           : item.status || "active"}
                       </Badge>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        <Switch
+                          checked={Boolean(item.leader_copilot_enabled)}
+                          onCheckedChange={(checked) =>
+                            handleToggleLeaderCopilot(item.workspace_id, checked)
+                          }
+                          disabled={copilotUpdating === item.workspace_id}
+                          aria-label="Ativar Copiloto do Líder"
+                        />
+                        <span className="text-xs text-muted-foreground">
+                          {item.leader_copilot_enabled ? "Ativado" : "Desativado"}
+                        </span>
+                      </div>
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-2">

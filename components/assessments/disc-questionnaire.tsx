@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Progress } from "@/components/ui/progress"
@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
 import { ArrowRight, ArrowLeft, CheckCircle2, AlertCircle } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
-import { createAssessmentResponse, completeAssessment } from "@/app/actions/assessments"
+import { createAssessmentResponse, completeAssessment, updateAssessmentProgress } from "@/app/actions/assessments"
 import { AssessmentHero } from "./assessment-hero"
 
 interface Question {
@@ -269,19 +269,45 @@ import { useRouter } from "next/navigation"
 interface DiscQuestionnaireProps {
   assessmentId: string
   workspaceId: string
+  initialQuestionIndex?: number
+  initialAnswers?: Record<number, Record<string, number>>
 }
 
-export function DiscQuestionnaire({ assessmentId, workspaceId }: DiscQuestionnaireProps) {
-  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0)
-  const [answers, setAnswers] = useState<Record<number, Record<string, number>>>({})
+export function DiscQuestionnaire({
+  assessmentId,
+  workspaceId,
+  initialQuestionIndex = 0,
+  initialAnswers = {}
+}: DiscQuestionnaireProps) {
+  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(
+    Math.min(Math.max(initialQuestionIndex, 0), QUESTIONS.length - 1)
+  )
+  const [answers, setAnswers] = useState<Record<number, Record<string, number>>>(initialAnswers)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [autoAdvance, setAutoAdvance] = useState(false)
   const { toast } = useToast()
   const router = useRouter()
+  const progressSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null)
 
   const currentQuestion = QUESTIONS[currentQuestionIndex]
   const progress = ((currentQuestionIndex) / QUESTIONS.length) * 100
-  const answeredCount = Object.keys(answers).length
+
+  useEffect(() => {
+    if (progressSaveTimeoutRef.current) {
+      clearTimeout(progressSaveTimeoutRef.current)
+    }
+
+    progressSaveTimeoutRef.current = setTimeout(() => {
+      updateAssessmentProgress(assessmentId, { currentQuestionIndex })
+        .catch((err) => console.error("Error saving DISC progress:", err))
+    }, 400)
+
+    return () => {
+      if (progressSaveTimeoutRef.current) {
+        clearTimeout(progressSaveTimeoutRef.current)
+      }
+    }
+  }, [assessmentId, currentQuestionIndex])
 
   const handleScoreChange = (type: string, score: number) => {
     setAnswers(prev => {

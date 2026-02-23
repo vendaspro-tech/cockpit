@@ -17,6 +17,7 @@ export interface SubscriptionItem {
   workspace_id: string
   workspace_name: string
   plan_name: string
+  leader_copilot_enabled?: boolean
   price: number
   status?: string
   active_users: number
@@ -94,6 +95,14 @@ export async function getSubscriptionStats(): Promise<{ stats: SubscriptionStats
   }
 
   const planMap = new Map(plans.map(p => [p.name.toLowerCase(), { price: p.price_monthly, limit: p.max_users }]))
+
+  const { data: workspaceFeatures } = await supabase
+    .from('workspace_features')
+    .select('workspace_id, leader_copilot_enabled')
+
+  const workspaceFeatureMap = new Map<string, boolean>(
+    (workspaceFeatures ?? []).map((item) => [item.workspace_id, Boolean(item.leader_copilot_enabled)])
+  )
   
   // Add hardcoded plans if missing
   if (!planMap.has('starter')) planMap.set('starter', { price: 0, limit: 5 })
@@ -139,6 +148,7 @@ export async function getSubscriptionStats(): Promise<{ stats: SubscriptionStats
       workspace_id: ws.id,
       workspace_name: ws.name,
       plan_name: planName,
+      leader_copilot_enabled: workspaceFeatureMap.get(ws.id) ?? false,
       price: planDetails.price,
       status: status,
       active_users: activeUsers,

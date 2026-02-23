@@ -66,12 +66,23 @@ interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
   workspaceName: string
   logoUrl?: string | null
   role?: string
+  showLeaderCopilot?: boolean
   workspaces: { id: string; name: string; logo_url?: string | null }[]
   alertsCount?: number
   plan?: string
 }
 
-export function AppSidebar({ workspaceId, workspaceName, logoUrl, role: _role, workspaces, alertsCount = 0, plan, ...props }: AppSidebarProps) {
+export function AppSidebar({
+  workspaceId,
+  workspaceName,
+  logoUrl,
+  role,
+  showLeaderCopilot = false,
+  workspaces,
+  alertsCount = 0,
+  plan,
+  ...props
+}: AppSidebarProps) {
   const pathname = usePathname()
   const pathDefaultGroup = useMemo(() => {
     if (pathname.includes('/comercial-pro')) return 'comercialpro'
@@ -80,7 +91,7 @@ export function AppSidebar({ workspaceId, workspaceName, logoUrl, role: _role, w
     if (pathname.includes('/products') || pathname.includes('/commercial-plan') || pathname.includes('/otes') || pathname.includes('/strategy')) return 'estrategia'
     return null
   }, [pathname])
-  void _role
+  const showSupportEntry = role !== 'system_owner'
   const [userOpenGroup, setUserOpenGroup] = useState<string | null | undefined>(undefined)
   const resolvedOpenGroup = userOpenGroup === undefined ? pathDefaultGroup : userOpenGroup
   const setGroupOpen = (group: string, open: boolean) => {
@@ -138,10 +149,20 @@ export function AppSidebar({ workspaceId, workspaceName, logoUrl, role: _role, w
               <SidebarMenuButton asChild isActive={pathname.includes('/agents')}>
                 <a href={`/${workspaceId}/agents`}>
                   <Bot />
-                  <span>Agentes IA</span>
+                  <span>Biblioteca de Agentes</span>
                 </a>
               </SidebarMenuButton>
             </SidebarMenuItem>
+            {showLeaderCopilot ? (
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild isActive={pathname.includes('/copiloto-lider')}>
+                  <a href={`/${workspaceId}/copiloto-lider`}>
+                    <Bot />
+                    <span>Copiloto do Líder</span>
+                  </a>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            ) : null}
             <SidebarMenuItem>
               <SidebarMenuButton asChild isActive={pathname.includes('/teams')}>
                 <a href={`/${workspaceId}/teams`}>
@@ -370,43 +391,43 @@ export function AppSidebar({ workspaceId, workspaceName, logoUrl, role: _role, w
           </>
         )}
 
-
-
-        <SidebarGroup className="mt-auto">
-          <SidebarSeparator className="mb-2" />
-          <SidebarContent>
-            <SidebarMenu className="flex flex-row items-center justify-between gap-1 px-2 py-2">
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild tooltip="Configurações">
-                  <a href={`/${workspaceId}/settings`} suppressHydrationWarning>
-                    <Settings className="h-5 w-5" />
-                    <span className="sr-only">Configurações</span>
-                  </a>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-              <SidebarMenuItem>
-                 <ModeToggle />
-              </SidebarMenuItem>
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild tooltip="Convidar Membros">
-                  <a href={`/${workspaceId}/settings?tab=users`} suppressHydrationWarning>
-                    <UserPlus className="h-5 w-5" />
-                    <span className="sr-only">Convidar</span>
-                  </a>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild tooltip="Suporte">
-                  <a href={`/${workspaceId}/support`} suppressHydrationWarning>
-                    <LifeBuoy className="h-5 w-5" />
-                    <span className="sr-only">Suporte</span>
-                  </a>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            </SidebarMenu>
-          </SidebarContent>
-        </SidebarGroup>
       </SidebarContent>
+      <SidebarFooter>
+        {showSupportEntry ? (
+          <SidebarMenu className="px-2 pb-2">
+            <SidebarMenuItem>
+              <SidebarMenuButton asChild isActive={pathname.includes('/support')}>
+                <a href={`/${workspaceId}/support`}>
+                  <LifeBuoy />
+                  <span>Suporte</span>
+                </a>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          </SidebarMenu>
+        ) : null}
+        <SidebarSeparator className="mb-2" />
+        <SidebarMenu className="flex flex-row items-center justify-between gap-1 px-2 py-2">
+          <SidebarMenuItem>
+            <SidebarMenuButton asChild tooltip="Configurações">
+              <a href={`/${workspaceId}/settings`} suppressHydrationWarning>
+                <Settings className="h-5 w-5" />
+                <span className="sr-only">Configurações</span>
+              </a>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+          <SidebarMenuItem>
+             <ModeToggle />
+          </SidebarMenuItem>
+          <SidebarMenuItem>
+            <SidebarMenuButton asChild tooltip="Convidar Membros">
+              <a href={`/${workspaceId}/settings?tab=users`} suppressHydrationWarning>
+                <UserPlus className="h-5 w-5" />
+                <span className="sr-only">Convidar</span>
+              </a>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        </SidebarMenu>
+      </SidebarFooter>
     </Sidebar>
   )
 }

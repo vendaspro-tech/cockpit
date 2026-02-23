@@ -1,4 +1,5 @@
 import { getUserRole } from "@/lib/auth-utils"
+import { listMyBugReports } from "@/app/actions/bug-reports"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
@@ -40,6 +41,7 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
   }
 
   const role = await getUserRole(user.id, workspaceId)
+  const myBugReports = await listMyBugReports(workspaceId)
 
   const { data: internalUser } = await supabase
     .from("users")
@@ -117,6 +119,12 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
     1: 'Tático (Coordenação)',
     2: 'Operacional (Supervisão)',
     3: 'Execução (Vendas)'
+  }
+
+  const bugStatusLabels: Record<string, string> = {
+    enviado: "Enviado",
+    em_avaliacao: "Em avaliação",
+    corrigido: "Corrigido",
   }
 
   return (
@@ -233,6 +241,89 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
             <div className="text-sm text-muted-foreground">
               Não encontramos seu vínculo com este workspace. Solicite suporte ao administrador.
             </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Bugs Relatados</CardTitle>
+          <CardDescription>
+            Acompanhe o andamento dos relatos enviados para o superadmin.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {myBugReports.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              Nenhum bug relatado neste workspace até agora.
+            </p>
+          ) : (
+            myBugReports.map((report) => (
+              <div key={report.id} className="rounded-lg border p-4 space-y-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="font-semibold">{report.title}</p>
+                    <p className="text-xs text-muted-foreground">
+                      Ticket: {report.id.slice(0, 8)} • {formatDate(report.created_at)}
+                    </p>
+                  </div>
+                  <Badge
+                    variant={
+                      report.status === "corrigido"
+                        ? "default"
+                        : report.status === "em_avaliacao"
+                          ? "secondary"
+                          : "outline"
+                    }
+                  >
+                    {bugStatusLabels[report.status] ?? report.status}
+                  </Badge>
+                </div>
+
+                <p className="text-sm whitespace-pre-wrap">{report.description}</p>
+
+                <div className="grid gap-2">
+                  <p className="text-xs font-medium text-muted-foreground">Anexos</p>
+                  {report.attachments.length === 0 ? (
+                    <p className="text-xs text-muted-foreground">Sem anexos.</p>
+                  ) : (
+                    <div className="flex flex-wrap gap-2">
+                      {report.attachments.map((attachment) =>
+                        attachment.signed_url ? (
+                          <a
+                            key={attachment.id}
+                            href={attachment.signed_url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-xs underline"
+                          >
+                            {attachment.file_name}
+                          </a>
+                        ) : (
+                          <span key={attachment.id} className="text-xs text-muted-foreground">
+                            {attachment.file_name}
+                          </span>
+                        )
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                <div className="grid gap-2">
+                  <p className="text-xs font-medium text-muted-foreground">Histórico</p>
+                  {report.events.length === 0 ? (
+                    <p className="text-xs text-muted-foreground">Sem histórico.</p>
+                  ) : (
+                    report.events.map((event) => (
+                      <div key={event.id} className="text-xs text-muted-foreground">
+                        {formatDate(event.created_at)}: {bugStatusLabels[event.to_status] ?? event.to_status}
+                        {event.changed_by?.full_name ? ` por ${event.changed_by.full_name}` : ""}
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            ))
           )}
         </CardContent>
       </Card>

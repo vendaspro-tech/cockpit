@@ -1,8 +1,19 @@
 import { LifeBuoy } from "lucide-react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { getAuthUser } from "@/lib/auth-server"
+import { isSystemOwner } from "@/lib/auth-utils"
+import { BugReportDialog } from "@/components/shared/bug-report-dialog"
 
-export default function SupportPage() {
+interface SupportPageProps {
+  params: Promise<{ workspaceId: string }>
+}
+
+export default async function SupportPage({ params }: SupportPageProps) {
+  const { workspaceId } = await params
+  const user = await getAuthUser()
+  const superAdmin = user ? await isSystemOwner(user.id) : false
+
   return (
     <div className="flex flex-col items-center justify-center min-h-[60vh] space-y-6">
       <div className="flex flex-col items-center space-y-2 text-center">
@@ -19,13 +30,18 @@ export default function SupportPage() {
         <CardHeader>
           <CardTitle>Precisa de ajuda agora?</CardTitle>
           <CardDescription>
-            Entre em contato com nossa equipe via email enquanto finalizamos nosso chat inteligente.
+            {superAdmin
+              ? "Use a visão administrativa para acompanhar relatos e comunicação com os usuários."
+              : "Envie um relato de bug com imagens para o superadmin analisar."}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-           <Button className="w-full" asChild>
-                <a href="mailto:support@cockpit.com">Enviar Email</a>
-           </Button>
+          {!superAdmin ? (
+            <BugReportDialog workspaceId={workspaceId} />
+          ) : null}
+          <Button className="w-full" variant={superAdmin ? "default" : "outline"} asChild>
+            <a href="mailto:support@cockpit.com">Enviar Email</a>
+          </Button>
         </CardContent>
       </Card>
     </div>

@@ -6,7 +6,8 @@ import { getAuthUser } from "@/lib/auth-server"
 import { isSystemOwner } from "@/lib/auth-utils"
 import { ensureSupabaseUser } from "@/lib/supabase/user"
 import { revalidatePath } from "next/cache"
-import { OpenAI } from "openai"
+import { enqueueKbSource, processPendingKbSources } from "@/lib/ai/kb/ingestion"
+import { sha256 } from "@/lib/ai/kb/chunking"
 
 const AgentDocumentTypeSchema = z.enum(["transcript", "pdi", "assessment", "document", "image_extracted"])
 
@@ -16,6 +17,8 @@ const AgentSchema = z.object({
   systemPrompt: z.string().min(10, "System prompt obrigatório"),
   model: z.string().min(2).default("gpt-4o-mini"),
   temperature: z.number().min(0).max(1).default(0.7),
+  productTags: z.array(z.string()).default([]),
+  categoryTags: z.array(z.string()).default([]),
   status: z.enum(["active", "inactive"]).default("active"),
 })
 
@@ -41,6 +44,8 @@ export type AdminAgent = {
   system_prompt: string
   model: string
   temperature: number
+  product_tags: string[]
+  category_tags: string[]
   status: "active" | "inactive"
   created_at: string
   updated_at: string
@@ -50,15 +55,45 @@ export type AdminAgentDocument = {
   id: string
   agent_id: string
   title: string
+<<<<<<< HEAD
   content: string
   type: AgentDocumentType
+=======
+  content: string | null
+  type: string
+>>>>>>> origin/develop
   source_url: string | null
+  filename: string | null
+  mime_type: string | null
+  size_bytes: number | null
+  storage_path: string | null
+  status: "pending" | "processing" | "ready" | "failed"
+  error_message: string | null
+  chunk_count: number
   created_at: string
   updated_at: string
   metadata: Record<string, any>
 }
 
+<<<<<<< HEAD
 async function requireSystemOwner(): Promise<ActionError | { userId: string }> {
+=======
+function normalizeTags(tags: string[]) {
+  const seen = new Set<string>()
+  const normalized: string[] = []
+  for (const rawTag of tags) {
+    const tag = rawTag.trim().replace(/\s+/g, " ")
+    if (!tag) continue
+    const key = tag.toLowerCase()
+    if (seen.has(key)) continue
+    seen.add(key)
+    normalized.push(tag)
+  }
+  return normalized
+}
+
+async function requireSystemOwner() {
+>>>>>>> origin/develop
   const user = await getAuthUser()
   if (!user) return { error: "Não autorizado" }
   const owner = await isSystemOwner(user.id)
@@ -121,6 +156,8 @@ export async function createAgent(input: z.infer<typeof AgentSchema>): Promise<A
       system_prompt: parsed.data.systemPrompt,
       model: parsed.data.model,
       temperature: parsed.data.temperature,
+      product_tags: normalizeTags(parsed.data.productTags),
+      category_tags: normalizeTags(parsed.data.categoryTags),
       status: parsed.data.status,
       created_by: auth.userId,
       updated_by: auth.userId,
@@ -153,6 +190,8 @@ export async function updateAgent(agentId: string, input: z.infer<typeof AgentSc
       system_prompt: parsed.data.systemPrompt,
       model: parsed.data.model,
       temperature: parsed.data.temperature,
+      product_tags: normalizeTags(parsed.data.productTags),
+      category_tags: normalizeTags(parsed.data.categoryTags),
       status: parsed.data.status,
       updated_by: auth.userId,
       updated_at: new Date().toISOString(),
@@ -213,8 +252,8 @@ export async function getAgentDocuments(agentId: string): Promise<AdminAgentDocu
   if ("error" in auth) return []
 
   const supabase = createAdminClient()
-  const { data, error } = await supabase
-    .from("ai_agent_knowledge_base")
+  const { data: sources, error } = await supabase
+    .from("ai_agent_kb_sources")
     .select("*")
     .eq("agent_id", agentId)
     .order("created_at", { ascending: false })
@@ -224,7 +263,39 @@ export async function getAgentDocuments(agentId: string): Promise<AdminAgentDocu
     return []
   }
 
-  return (data ?? []) as AdminAgentDocument[]
+  const sourceRows = (sources ?? []) as any[]
+  const sourceIds = sourceRows.map((source) => source.id)
+
+  let chunkCountMap = new Map<string, number>()
+  if (sourceIds.length > 0) {
+    const { data: chunkRows } = await supabase
+      .from("ai_agent_kb_chunks")
+      .select("source_id")
+      .in("source_id", sourceIds)
+    chunkCountMap = (chunkRows ?? []).reduce((map, row: any) => {
+      map.set(row.source_id, (map.get(row.source_id) || 0) + 1)
+      return map
+    }, new Map<string, number>())
+  }
+
+  return sourceRows.map((row) => ({
+    id: row.id,
+    agent_id: row.agent_id,
+    title: row.title,
+    content: row.inline_content ?? null,
+    type: row.type,
+    source_url: row.metadata?.source_url || null,
+    filename: row.filename ?? null,
+    mime_type: row.mime_type ?? null,
+    size_bytes: row.size_bytes ?? null,
+    storage_path: row.storage_path ?? null,
+    status: row.status,
+    error_message: row.error_message ?? null,
+    chunk_count: chunkCountMap.get(row.id) || 0,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+    metadata: row.metadata || {},
+  })) as AdminAgentDocument[]
 }
 
 export async function createAgentDocument(
@@ -240,31 +311,21 @@ export async function createAgentDocument(
   const openaiKey = process.env.OPENAI_API_KEY
   if (!openaiKey) return { error: "OPENAI_API_KEY ausente no servidor" }
 
-  const openai = new OpenAI({ apiKey: openaiKey })
-  const embeddingResponse = await openai.embeddings.create({
-    model: "text-embedding-3-small",
-    input: parsed.data.content,
-  })
-
-  const embedding = embeddingResponse.data[0].embedding
-
-  const supabase = createAdminClient()
-  const { error } = await supabase
-    .from("ai_agent_knowledge_base")
-    .insert({
-      agent_id: agentId,
+  try {
+    const { source } = await enqueueKbSource({
+      agentId,
       title: parsed.data.title,
-      content: parsed.data.content,
       type: parsed.data.type,
-      embedding,
-      source_url: parsed.data.sourceUrl ? parsed.data.sourceUrl : null,
+      inlineContent: parsed.data.content,
+      checksum: sha256(Buffer.from(parsed.data.content, "utf-8")),
       metadata: {
-        indexed_at: new Date().toISOString(),
-        content_length: parsed.data.content.length,
+        source: "manual",
+        source_url: parsed.data.sourceUrl ? parsed.data.sourceUrl : null,
       },
     })
 
-  if (error) {
+    await processPendingKbSources({ sourceId: source.id, limit: 1 }, openaiKey)
+  } catch (error) {
     console.error("Error creating agent doc:", error)
     return { error: "Erro ao adicionar documento" }
   }
@@ -287,26 +348,20 @@ export async function updateAgentDocument(
   const openaiKey = process.env.OPENAI_API_KEY
   if (!openaiKey) return { error: "OPENAI_API_KEY ausente no servidor" }
 
-  const openai = new OpenAI({ apiKey: openaiKey })
-  const embeddingResponse = await openai.embeddings.create({
-    model: "text-embedding-3-small",
-    input: parsed.data.content,
-  })
-
-  const embedding = embeddingResponse.data[0].embedding
-
   const supabase = createAdminClient()
   const { error } = await supabase
-    .from("ai_agent_knowledge_base")
+    .from("ai_agent_kb_sources")
     .update({
       title: parsed.data.title,
-      content: parsed.data.content,
       type: parsed.data.type,
-      embedding,
-      source_url: parsed.data.sourceUrl ? parsed.data.sourceUrl : null,
+      inline_content: parsed.data.content,
+      checksum_sha256: sha256(Buffer.from(parsed.data.content, "utf-8")),
+      status: "pending",
+      error_message: null,
       metadata: {
-        indexed_at: new Date().toISOString(),
-        content_length: parsed.data.content.length,
+        source: "manual",
+        source_url: parsed.data.sourceUrl ? parsed.data.sourceUrl : null,
+        reindex_requested_at: new Date().toISOString(),
       },
     })
     .eq("id", documentId)
@@ -315,6 +370,14 @@ export async function updateAgentDocument(
   if (error) {
     console.error("Error updating agent doc:", error)
     return { error: "Erro ao atualizar documento" }
+  }
+
+  await supabase.from("ai_agent_kb_chunks").delete().eq("source_id", documentId)
+  try {
+    await processPendingKbSources({ sourceId: documentId, limit: 1 }, openaiKey)
+  } catch (processingError) {
+    console.error("Error reindexing agent doc:", processingError)
+    return { error: "Documento atualizado, mas falhou no reprocessamento" }
   }
 
   revalidatePath(`/admin/agents/${agentId}`)
@@ -326,8 +389,15 @@ export async function deleteAgentDocument(agentId: string, documentId: string): 
   if ("error" in auth) return auth
 
   const supabase = createAdminClient()
+  const { data: existing } = await supabase
+    .from("ai_agent_kb_sources")
+    .select("storage_path")
+    .eq("id", documentId)
+    .eq("agent_id", agentId)
+    .maybeSingle()
+
   const { error } = await supabase
-    .from("ai_agent_knowledge_base")
+    .from("ai_agent_kb_sources")
     .delete()
     .eq("id", documentId)
     .eq("agent_id", agentId)
@@ -335,6 +405,12 @@ export async function deleteAgentDocument(agentId: string, documentId: string): 
   if (error) {
     console.error("Error deleting agent doc:", error)
     return { error: "Erro ao excluir documento" }
+  }
+
+  if (existing?.storage_path) {
+    await supabase.storage
+      .from("ai-agent-kb-files")
+      .remove([existing.storage_path])
   }
 
   revalidatePath(`/admin/agents/${agentId}`)
@@ -392,4 +468,90 @@ export async function getConversationMessagesAdmin(conversationId: string) {
   }
 
   return data ?? []
+}
+
+export type AdminTrainingConversation = {
+  id: string
+  title: string | null
+  last_message_at: string | null
+  created_at: string
+}
+
+export type AdminTrainingMessage = {
+  id: string
+  sender: "user" | "assistant" | "system"
+  content: string
+  metadata: Record<string, any> | null
+  created_at: string
+}
+
+export async function getAgentTrainingConversationsAdmin(agentId: string): Promise<AdminTrainingConversation[]> {
+  const auth = await requireSystemOwner()
+  if ("error" in auth) return []
+
+  const supabase = createAdminClient()
+  const { data, error } = await supabase
+    .from("ai_admin_agent_conversations")
+    .select("id, title, last_message_at, created_at")
+    .eq("agent_id", agentId)
+    .eq("user_id", auth.userId)
+    .order("last_message_at", { ascending: false, nullsFirst: false })
+
+  if (error) {
+    console.error("Error fetching admin training conversations:", error)
+    return []
+  }
+
+  return (data ?? []) as AdminTrainingConversation[]
+}
+
+export async function getAdminTrainingMessages(conversationId: string): Promise<AdminTrainingMessage[]> {
+  const auth = await requireSystemOwner()
+  if ("error" in auth) return []
+
+  const supabase = createAdminClient()
+  const { data: conversation, error: conversationError } = await supabase
+    .from("ai_admin_agent_conversations")
+    .select("id")
+    .eq("id", conversationId)
+    .eq("user_id", auth.userId)
+    .maybeSingle()
+
+  if (conversationError || !conversation) {
+    return []
+  }
+
+  const { data, error } = await supabase
+    .from("ai_admin_agent_messages")
+    .select("id, sender, content, metadata, created_at")
+    .eq("conversation_id", conversationId)
+    .order("created_at", { ascending: true })
+
+  if (error) {
+    console.error("Error fetching admin training messages:", error)
+    return []
+  }
+
+  return (data ?? []) as AdminTrainingMessage[]
+}
+
+type AdminActionResult = { success: true } | { error: string }
+
+export async function deleteAdminTrainingConversation(conversationId: string): Promise<AdminActionResult> {
+  const auth = await requireSystemOwner()
+  if ("error" in auth) return { error: auth.error ?? "Não autorizado" }
+
+  const supabase = createAdminClient()
+  const { error } = await supabase
+    .from("ai_admin_agent_conversations")
+    .delete()
+    .eq("id", conversationId)
+    .eq("user_id", auth.userId)
+
+  if (error) {
+    console.error("Error deleting admin training conversation:", error)
+    return { error: "Erro ao excluir conversa" }
+  }
+
+  return { success: true }
 }

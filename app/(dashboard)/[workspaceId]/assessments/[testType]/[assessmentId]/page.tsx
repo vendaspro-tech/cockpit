@@ -71,7 +71,11 @@ async function getAssessmentData(assessmentId: string) {
   return {
     assessment,
     structure: structure?.structure,
-    initialData: formattedResponses,
+    initialData: {
+      ...formattedResponses,
+      currentCategoryIndex: assessment.current_category_index ?? 0,
+      currentQuestionIndex: assessment.current_question_index ?? 0
+    },
     results,
     product_id: assessment.product_id
   }
@@ -202,7 +206,13 @@ export default async function AssessmentPage({ params }: AssessmentPageProps) {
     'use server'
     
     const supabase = createAdminClient()
-    const { answers, comments } = formData
+    const {
+      answers,
+      comments,
+      currentCategoryIndex,
+      currentQuestionIndex,
+      product_id
+    } = formData
 
     // Prepare upsert data
     const upsertData = Object.keys(answers).map(questionId => ({
@@ -238,7 +248,10 @@ export default async function AssessmentPage({ params }: AssessmentPageProps) {
     // Update assessment status
     const statusPayload = { 
       status: finalStatus,
-      completed_at: finalStatus === 'completed' ? new Date().toISOString() : null
+      completed_at: finalStatus === 'completed' ? new Date().toISOString() : null,
+      current_category_index: Number.isInteger(currentCategoryIndex) ? currentCategoryIndex : 0,
+      current_question_index: Number.isInteger(currentQuestionIndex) ? currentQuestionIndex : 0,
+      product_id: product_id ?? null
     }
 
     const { error: statusError } = await supabase

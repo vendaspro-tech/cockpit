@@ -6,7 +6,12 @@ export async function GET(request: Request) {
   const requestUrl = new URL(request.url)
   const token_hash = requestUrl.searchParams.get('token_hash')
   const type = requestUrl.searchParams.get('type')
-  const next = requestUrl.searchParams.get('next') ?? '/'
+  const nextParam = requestUrl.searchParams.get('next')
+  const next = nextParam?.startsWith('/')
+    ? nextParam
+    : type === 'recovery'
+      ? '/reset-password'
+      : '/'
 
   console.log('Auth callback:', { token_hash, type, next })
 

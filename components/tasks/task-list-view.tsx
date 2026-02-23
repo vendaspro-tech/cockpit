@@ -134,6 +134,13 @@ export function TaskListView({ tasks }: TaskListViewProps) {
     }
   }
 
+  const getPDIContext = (task: UnifiedTask) => {
+    if (task.type !== 'pdi_action') return null
+
+    const contextParts = [task.metadata?.category, task.metadata?.pdi_criterion].filter(Boolean)
+    return contextParts.length > 0 ? `PDI • ${contextParts.join(' • ')}` : 'PDI'
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex justify-end">
@@ -168,7 +175,15 @@ export function TaskListView({ tasks }: TaskListViewProps) {
               </TableRow>
             ) : (
               filteredTasks.map((task) => (
+<<<<<<< HEAD
                 <TableRow key={task.id} className="group cursor-pointer" onClick={() => openTaskDialog(task)}>
+=======
+                <TableRow
+                  key={task.id}
+                  className="group cursor-pointer"
+                  onClick={() => setEditingTask(task)}
+                >
+>>>>>>> origin/develop
                   <TableCell>
                     <button 
                       onClick={(e) => {
@@ -191,6 +206,11 @@ export function TaskListView({ tasks }: TaskListViewProps) {
                       task.status === 'done' && "text-muted-foreground line-through"
                     )}>
                       <span>{task.title}</span>
+                      {task.type === 'pdi_action' && (
+                        <span className="text-xs text-muted-foreground font-normal line-clamp-1">
+                          {getPDIContext(task)}
+                        </span>
+                      )}
                       {task.description && (
                         <span className="text-xs text-muted-foreground font-normal line-clamp-1">
                           {task.description}
@@ -208,7 +228,7 @@ export function TaskListView({ tasks }: TaskListViewProps) {
                           : "bg-muted text-muted-foreground border-border"
                       )}
                     >
-                      {task.type === 'pdi_action' ? 'PDI' : 'Tarefa'}
+                      {task.type === 'pdi_action' ? 'Ação de desenvolvimento (PDI)' : 'Tarefa'}
                     </Badge>
                   </TableCell>
                   <TableCell>

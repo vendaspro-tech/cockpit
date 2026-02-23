@@ -38,7 +38,7 @@ export function TaskCalendarView({ tasks }: TaskCalendarViewProps) {
     .filter(task => task.due_date)
     .map(task => ({
       id: task.id,
-      title: task.title,
+      title: task.type === 'pdi_action' ? `PDI: ${task.title}` : task.title,
       start: new Date(task.due_date!),
       end: new Date(task.due_date!),
       allDay: true,

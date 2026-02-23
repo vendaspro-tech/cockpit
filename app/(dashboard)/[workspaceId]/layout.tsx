@@ -15,6 +15,9 @@ import {
 import { DashboardBreadcrumb } from "@/components/dashboard-breadcrumb"
 import { getAuthUser } from "@/lib/auth-server"
 import { getUserRole } from "@/lib/auth-utils"
+import { canAccessLeaderCopilot } from "@/lib/leader-scope"
+import { getPlatformFeedbackPromptState } from "@/app/actions/platform-feedback"
+import { PlatformFeedbackDialog } from "@/components/shared/platform-feedback-dialog"
 
 interface DashboardLayoutProps {
   children: React.ReactNode
@@ -36,8 +39,6 @@ async function getWorkspace(workspaceId: string) {
 
 
 import { getActiveSystemAlerts } from "@/app/actions/system-alerts"
-
-// ... imports ...
 
 export default async function DashboardLayout({
   children,
@@ -62,9 +63,11 @@ export default async function DashboardLayout({
     redirect('/') // User not a member of this workspace
   }
 
-  const [workspaces, alerts] = await Promise.all([
+  const [workspaces, alerts, feedbackPromptState, showLeaderCopilot] = await Promise.all([
     getUserWorkspaces(),
-    getActiveSystemAlerts(workspaceId)
+    getActiveSystemAlerts(workspaceId),
+    getPlatformFeedbackPromptState(),
+    canAccessLeaderCopilot(workspaceId, user.id),
   ])
 
   // Get current path for breadcrumb
@@ -86,6 +89,7 @@ export default async function DashboardLayout({
         workspaceName={workspace?.name || 'Workspace'}
         logoUrl={workspace?.logo_url}
         role={userRole}
+        showLeaderCopilot={showLeaderCopilot}
         workspaces={workspaces}
         alertsCount={alerts.length}
         plan={workspace?.plan}
@@ -116,6 +120,7 @@ export default async function DashboardLayout({
         <main className="flex-1 overflow-y-auto px-6 pb-6 pt-5">
           {children}
         </main>
+        <PlatformFeedbackDialog initialOpen={feedbackPromptState.shouldShow} />
       </SidebarInset>
     </SidebarProvider>
   )

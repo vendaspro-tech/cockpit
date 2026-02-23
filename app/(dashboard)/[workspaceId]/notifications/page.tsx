@@ -34,7 +34,7 @@ export default async function NotificationsPage({ params }: NotificationsPagePro
 
       <Separator className="my-6" />
 
-      <NotificationsClient notifications={notifications} />
+      <NotificationsClient notifications={notifications} workspaceId={workspaceId} />
     </div>
   )
 }

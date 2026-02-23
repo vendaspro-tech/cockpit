@@ -108,6 +108,45 @@ export async function createAssessmentResponse(assessmentId: string, questionId:
   }
 }
 
+export async function updateAssessmentProgress(
+  assessmentId: string,
+  progress: {
+    currentCategoryIndex?: number
+    currentQuestionIndex?: number
+    productId?: string | null
+  }
+) {
+  const user = await getAuthUser()
+  if (!user) throw new Error('Unauthorized')
+
+  const supabase = createAdminClient()
+  const payload: Record<string, number | string | null> = {}
+
+  if (typeof progress.currentCategoryIndex === 'number') {
+    payload.current_category_index = Math.max(0, progress.currentCategoryIndex)
+  }
+
+  if (typeof progress.currentQuestionIndex === 'number') {
+    payload.current_question_index = Math.max(0, progress.currentQuestionIndex)
+  }
+
+  if (progress.productId !== undefined) {
+    payload.product_id = progress.productId
+  }
+
+  if (Object.keys(payload).length === 0) return
+
+  const { error } = await supabase
+    .from('assessments')
+    .update(payload)
+    .eq('id', assessmentId)
+
+  if (error) {
+    console.error('Error updating assessment progress:', error)
+    throw new Error('Failed to update assessment progress')
+  }
+}
+
 export async function completeAssessment(assessmentId: string, results: { scores: unknown; profile: string; answers?: unknown; [key: string]: unknown }) {
   const user = await getAuthUser()
   if (!user) throw new Error('Unauthorized')

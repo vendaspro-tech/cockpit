@@ -105,7 +105,13 @@ function mapTaskPriority(priority: string | null | undefined): "P1" | "P2" | "P3
 }
 
 function shouldForceTeamProgressFallback(message: string): boolean {
-  return /(quant|qtd|avalia|avaliac|time|progres|status|tarefa|task|pdi)/i.test(message)
+  const normalized = message.toLowerCase()
+  const looksLikeAction = /(cria|criar|edita|editar|altera|alterar|atualiza|atualizar|manda|enviar|envia|notifica)/i.test(
+    normalized
+  )
+  if (looksLikeAction) return false
+
+  return /(quant|qtd|avalia|avaliac|time|progres|status|tarefa|task|pdi)/i.test(normalized)
 }
 
 function buildTeamProgressAnswer(snapshot: LeaderProgressSnapshot): string {
@@ -117,6 +123,131 @@ function buildTeamProgressAnswer(snapshot: LeaderProgressSnapshot): string {
     `- PDIs: ${totals.pdis.active} ativos, ${totals.pdis.completed} concluídos, ${totals.pdis.draft} rascunhos, ${totals.pdis.archived} arquivados.`,
     `Se quiser, eu detalho por colaborador ou já preparo uma ação.`,
   ].join("\n")
+}
+
+function normalizeText(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+}
+
+function extractQuotedTitle(message: string): string | null {
+  const doubleQuoted = message.match(/\"([^\"]+)\"/)
+  if (doubleQuoted?.[1]) return doubleQuoted[1].trim()
+
+  const singleQuoted = message.match(/'([^']+)'/)
+  if (singleQuoted?.[1]) return singleQuoted[1].trim()
+
+  const named = message.match(/(?:nome|titulo)\s*[:=]?\s*([^\n,]+)$/i)
+  if (named?.[1]) return named[1].trim()
+
+  const afterColon = message.match(/:\s*([^\n]+)$/)
+  if (afterColon?.[1]) return afterColon[1].trim()
+
+  return null
+}
+
+function findTargetUserFromMessage(
+  message: string,
+  scopedUsers: Awaited<ReturnType<typeof getLeaderScopeUsers>>,
+  actorInternalUserId: string
+) {
+  const normalized = normalizeText(message)
+
+  if (/(pra mim|para mim|p mim|meu)/i.test(normalized)) {
+    return scopedUsers.find((user) => user.id === actorInternalUserId) ?? null
+  }
+
+  const sortedCandidates = [...scopedUsers].sort((a, b) => b.name.length - a.name.length)
+  for (const user of sortedCandidates) {
+    const name = normalizeText(user.name)
+    const email = normalizeText(user.email || "")
+
+    if (name && normalized.includes(name)) return user
+    if (email && normalized.includes(email)) return user
+
+    const firstName = name.split(" ").filter(Boolean)[0]
+    if (firstName && firstName.length >= 3 && normalized.includes(firstName)) return user
+  }
+
+  return null
+}
+
+async function maybeHandleDirectActionIntent(
+  params: RunTurnParams,
+  scopedUsers: Awaited<ReturnType<typeof getLeaderScopeUsers>>
+): Promise<ToolCallResult | null> {
+  const normalized = normalizeText(params.message)
+  const wantsCreateTask = /(cria|criar).*(tarefa|task)|(tarefa|task).*(cria|criar)/i.test(normalized)
+  const wantsUpdateTask = /(edita|editar|altera|alterar|atualiza|atualizar).*(tarefa|task)/i.test(normalized)
+
+  if (wantsUpdateTask) {
+    return {
+      type: "answer",
+      message:
+        "Consigo editar tarefa, mas preciso identificar qual tarefa. Me envie o ID da task (ou peça primeiro para eu listar as tarefas do colaborador) e o que deseja alterar.",
+      metadata: { parser: "direct_action_intent", intent: "update_task_missing_task_id" },
+    }
+  }
+
+  if (!wantsCreateTask) return null
+
+  const target = findTargetUserFromMessage(params.message, scopedUsers, params.actorInternalUserId)
+  const title = extractQuotedTitle(params.message)
+
+  if (!target) {
+    return {
+      type: "answer",
+      message:
+        "Consigo criar a task, mas preciso saber para quem. Informe o nome do colaborador (ou diga 'pra mim').",
+      metadata: { parser: "direct_action_intent", intent: "create_task_missing_target" },
+    }
+  }
+
+  if (!title) {
+    return {
+      type: "answer",
+      message:
+        `Consigo criar a task para ${target.name}, mas preciso do título. Exemplo: nome \"Fazer follow-up nos leads\".`,
+      metadata: { parser: "direct_action_intent", intent: "create_task_missing_title" },
+    }
+  }
+
+  const context: ToolExecutionContext = {
+    workspaceId: params.workspaceId,
+    conversationId: params.conversationId,
+    actorAuthUserId: params.actorAuthUserId,
+    actorInternalUserId: params.actorInternalUserId,
+    scopedUsers,
+    client: params.client,
+  }
+
+  const payload = {
+    targetUserId: target.id,
+    title,
+    description: null,
+    priority: null,
+    dueDate: null,
+    status: "todo",
+  }
+
+  const preview = {
+    targetUserName: target.name,
+    title,
+    dueDate: null,
+    priority: null,
+    status: "todo",
+  }
+
+  const pendingAction = await createPendingAction(context, "create_task", target.id, payload, preview)
+
+  return {
+    type: "pending_action",
+    message: `Proposta criada para nova tarefa de ${target.name}. Revise e clique em confirmar para executar.`,
+    pendingAction,
+    metadata: { parser: "direct_action_intent", intent: "create_task" },
+  }
 }
 
 export async function getLeaderCopilotAgentId(): Promise<string | null> {
@@ -604,6 +735,11 @@ export async function runLeaderCopilotTurn(params: RunTurnParams): Promise<ToolC
   const scopedUsers = await getLeaderScopeUsers(params.workspaceId, params.actorAuthUserId, params.client)
   if (scopedUsers.length === 0) {
     throw new Error("Usuário sem escopo de liderados para o Copiloto")
+  }
+
+  const directActionResult = await maybeHandleDirectActionIntent(params, scopedUsers)
+  if (directActionResult) {
+    return directActionResult
   }
 
   const openai = new OpenAI({ apiKey: openAiKey })

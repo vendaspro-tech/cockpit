@@ -70,7 +70,6 @@ export type AdminAgentDocument = {
   metadata: Record<string, any>
 }
 
-async function requireSystemOwner(): Promise<ActionError | { userId: string }> {
 function normalizeTags(tags: string[]) {
   const seen = new Set<string>()
   const normalized: string[] = []

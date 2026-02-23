@@ -176,7 +176,6 @@ export function TaskListView({ tasks }: TaskListViewProps) {
             ) : (
               filteredTasks.map((task) => (
                 <TableRow key={task.id} className="group cursor-pointer" onClick={() => openTaskDialog(task)}>
-                <TableRow key={task.id} className="group cursor-pointer" onClick={() => openTaskDialog(task)}>
                   <TableCell>
                     <button 
                       onClick={(e) => {

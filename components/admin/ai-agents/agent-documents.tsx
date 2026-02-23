@@ -38,7 +38,6 @@ export function AgentDocuments({ agentId, documents }: AgentDocumentsProps) {
   const { toast } = useToast()
   const router = useRouter()
   const [loading, setLoading] = useState(false)
-  const [draft, setDraft] = useState<AgentDocumentFormInput>({ ...emptyDoc })
   const [uploading, setUploading] = useState(false)
   const [draft, setDraft] = useState<AgentDocumentFormInput>({ ...emptyDoc })
   const [editing, setEditing] = useState<AdminAgentDocument | null>(null)

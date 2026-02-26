@@ -5,7 +5,6 @@ import { DateRange } from 'react-day-picker'
 
 
 import { useRouter } from 'next/navigation'
-import Link from 'next/link'
 import { Plus, Filter, Search, X, ArrowUpDown, BarChart3, Users, Target, Compass, Gem, ListFilter, FileText, Calendar as CalendarIcon, BrainCircuit, Package } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -252,16 +251,10 @@ export function AssessmentsDashboard({ initialData, workspaceId, users, products
 
   return (
     <div className="space-y-8" suppressHydrationWarning>
-      {/* Header & Actions */}
+      {/* Header */}
       <div className="flex flex-col gap-6">
         <div className="flex items-center justify-between">
           <h1 className="text-3xl font-bold text-foreground">Avaliações</h1>
-          <Link href={`/${workspaceId}/assessments/dashboard`}>
-            <Button variant="outline" className="gap-2">
-              <BarChart3 className="w-4 h-4" />
-              Dashboard de Performance
-            </Button>
-          </Link>
         </div>
 
         {/* New Assessment Cards */}

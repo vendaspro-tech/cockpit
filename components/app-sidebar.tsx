@@ -275,11 +275,24 @@ export function AppSidebar({
                 <SidebarMenuItem className="pl-4">
                   <SidebarMenuButton
                     asChild
-                    isActive={pathname.includes('/assessments') && !pathname.includes('/assessments/def') && !pathname.includes('/assessments/seniority-v2')}
+                    isActive={
+                      pathname.includes('/assessments') &&
+                      !pathname.includes('/assessments/def') &&
+                      !pathname.includes('/assessments/seniority-v2') &&
+                      !pathname.includes('/assessments/dashboard')
+                    }
                   >
                     <a href={`/${workspaceId}/assessments`}>
                       <ClipboardList />
                       <span>Avaliações</span>
+                    </a>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+                <SidebarMenuItem className="pl-4">
+                  <SidebarMenuButton asChild isActive={pathname.includes('/assessments/dashboard')}>
+                    <a href={`/${workspaceId}/assessments/dashboard`}>
+                      <BarChart3 />
+                      <span>Dashboard de Performance</span>
                     </a>
                   </SidebarMenuButton>
                 </SidebarMenuItem>

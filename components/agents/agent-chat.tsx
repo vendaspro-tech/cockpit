@@ -18,6 +18,12 @@ import {
   type ConversationAttachment,
 } from "@/app/actions/ai-agents"
 import { Plus, Trash } from "lucide-react"
+import {
+  AudioRecorderControl,
+  ChatAudioPlayer,
+  getChatAudioMetadata,
+  type RecordedAudioDraft,
+} from "@/components/shared/chat-audio"
 
 type AgentChatProps = {
   agentId: string
@@ -55,6 +61,7 @@ export function AgentChat({
     }>
   >([])
   const [uploading, setUploading] = useState(false)
+  const [pendingRecordedAudio, setPendingRecordedAudio] = useState<RecordedAudioDraft | null>(null)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
 
@@ -74,6 +81,7 @@ export function AgentChat({
 
   const handleSelectConversation = async (conversationId: string) => {
     setSelectedId(conversationId)
+    setPendingRecordedAudio(null)
     const data = await getConversationMessages(conversationId)
     setMessages(data)
     const files = await getConversationAttachments(conversationId)
@@ -84,6 +92,7 @@ export function AgentChat({
     setSelectedId(null)
     setMessages([])
     setAttachments([])
+    setPendingRecordedAudio(null)
   }
 
   const handleDeleteConversation = async (conversationId: string) => {
@@ -105,19 +114,35 @@ export function AgentChat({
   }
 
   const handleSend = async () => {
+    const hasPendingAudio = Boolean(pendingRecordedAudio)
     const hasPending = pendingAttachments.length > 0
-    if (!input.trim() && !hasPending) return
-    const messageText = input.trim() || (hasPending ? "Enviei um arquivo para análise." : "")
+    const transcriptText = pendingRecordedAudio?.transcript?.trim() || ""
+    if (!input.trim() && !hasPending && !hasPendingAudio) return
+    const apiMessageText = input.trim() || transcriptText
+    const messageText =
+      apiMessageText ||
+      (hasPendingAudio ? "Áudio enviado" : hasPending ? "Enviei um arquivo para análise." : "")
+    const messageMetadata = hasPendingAudio
+      ? {
+          audio: {
+            dataUrl: pendingRecordedAudio!.dataUrl,
+            mimeType: pendingRecordedAudio!.mimeType,
+            durationMs: pendingRecordedAudio!.durationMs,
+            transcript: transcriptText || undefined,
+          },
+        }
+      : undefined
     const optimisticUser: ConversationMessage = {
       id: `${Date.now()}-user`,
       sender: "user",
       content: messageText,
       created_at: new Date().toISOString(),
-      metadata: {},
+      metadata: messageMetadata ?? {},
     }
+    const optimisticUserId = optimisticUser.id
 
     setInput("")
-    if (messageText) {
+    if (messageText || hasPendingAudio) {
       setMessages((prev) => [...prev, optimisticUser])
     }
     setLoading(true)
@@ -212,7 +237,8 @@ export function AgentChat({
           agentId,
           workspaceId,
           conversationId: resolvedConversationId ?? undefined,
-          message: messageText,
+          message: apiMessageText,
+          messageMetadata,
         }),
       })
 
@@ -220,6 +246,23 @@ export function AgentChat({
       if (!response.ok) {
         toast({ title: "Erro", description: result.error || "Falha ao enviar mensagem", variant: "destructive" })
         return
+      }
+
+      if (result.userMessage) {
+        setMessages((prev) =>
+          prev.map((msg) =>
+            msg.id === optimisticUserId
+              ? {
+                  ...msg,
+                  content: result.userMessage,
+                  metadata:
+                    result.userMessageMetadata && typeof result.userMessageMetadata === "object"
+                      ? result.userMessageMetadata
+                      : msg.metadata,
+                }
+              : msg
+          )
+        )
       }
 
       const assistantMessage: ConversationMessage = {
@@ -238,6 +281,7 @@ export function AgentChat({
         setAttachments(files)
       }
 
+      setPendingRecordedAudio(null)
       await refreshConversations()
     } catch (error) {
       toast({ title: "Erro", description: "Não foi possível enviar sua mensagem.", variant: "destructive" })
@@ -356,6 +400,11 @@ export function AgentChat({
                     {msg.sender === "user" ? "Você" : "Agente"}
                   </p>
                   <p className="whitespace-pre-wrap">{msg.content}</p>
+                  {(() => {
+                    const audio = getChatAudioMetadata(msg.metadata)
+                    if (!audio) return null
+                    return <ChatAudioPlayer audio={audio} className="mt-2" />
+                  })()}
                 </div>
               ))}
               {loading && (
@@ -409,6 +458,50 @@ export function AgentChat({
                 ))}
               </div>
             )}
+            <AudioRecorderControl
+              disabled={loading || uploading}
+              onRecorded={(draft) => {
+                setPendingRecordedAudio(draft)
+                if (!input.trim() && draft.transcript) {
+                  setInput(draft.transcript)
+                }
+              }}
+              onError={(description) =>
+                toast({ title: "Áudio", description, variant: "destructive" })
+              }
+            />
+            {pendingRecordedAudio && (
+              <div className="rounded-lg border border-border bg-muted/30 p-3 space-y-2">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-sm font-medium">Áudio pronto para envio</p>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => setPendingRecordedAudio(null)}
+                      disabled={loading || uploading}
+                    >
+                      Cancelar e apagar
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={handleSend}
+                      disabled={loading || uploading}
+                    >
+                      Enviar áudio
+                    </Button>
+                  </div>
+                </div>
+                <ChatAudioPlayer audio={pendingRecordedAudio} />
+                {!pendingRecordedAudio.transcript && (
+                  <p className="text-xs text-muted-foreground">
+                    Você pode enviar só o áudio. A transcrição será feita no backend antes de chamar a IA.
+                  </p>
+                )}
+              </div>
+            )}
             <Textarea
               value={input}
               onChange={(e) => setInput(e.target.value)}
@@ -425,7 +518,14 @@ export function AgentChat({
               <Button variant="outline" onClick={handleAttachmentClick} disabled={uploading || loading}>
                 {uploading ? "Processando..." : "Anexar arquivo"}
               </Button>
-              <Button onClick={handleSend} disabled={loading || uploading || (!input.trim() && pendingAttachments.length === 0)}>
+              <Button
+                onClick={handleSend}
+                disabled={
+                  loading ||
+                  uploading ||
+                  (!input.trim() && pendingAttachments.length === 0 && !pendingRecordedAudio)
+                }
+              >
                 Enviar
               </Button>
             </div>

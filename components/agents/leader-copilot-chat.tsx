@@ -17,6 +17,12 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
 import { useToast } from "@/hooks/use-toast"
+import {
+  AudioRecorderControl,
+  ChatAudioPlayer,
+  getChatAudioMetadata,
+  type RecordedAudioDraft,
+} from "@/components/shared/chat-audio"
 
 type LeaderCopilotChatProps = {
   workspaceId: string
@@ -42,6 +48,7 @@ export function LeaderCopilotChat({
   const [input, setInput] = useState("")
   const [loading, setLoading] = useState(false)
   const [confirmingActionId, setConfirmingActionId] = useState<string | null>(null)
+  const [pendingRecordedAudio, setPendingRecordedAudio] = useState<RecordedAudioDraft | null>(null)
 
   const bottomRef = useRef<HTMLDivElement>(null)
 
@@ -61,6 +68,7 @@ export function LeaderCopilotChat({
 
   const loadConversation = async (conversationId: string) => {
     setSelectedId(conversationId)
+    setPendingRecordedAudio(null)
     const [conversationMessages, actions] = await Promise.all([
       getLeaderCopilotMessages(conversationId),
       getPendingActionsForConversation(conversationId),
@@ -74,12 +82,25 @@ export function LeaderCopilotChat({
     setSelectedId(null)
     setMessages([])
     setPendingActions([])
+    setPendingRecordedAudio(null)
   }
 
   const handleSend = async () => {
-    if (!input.trim()) return
+    const transcriptText = pendingRecordedAudio?.transcript?.trim() || ""
+    if (!input.trim() && !pendingRecordedAudio) return
 
-    const messageText = input.trim()
+    const apiMessageText = input.trim() || transcriptText
+    const messageText = apiMessageText || (pendingRecordedAudio ? "Áudio enviado" : "")
+    const messageMetadata = pendingRecordedAudio
+      ? {
+          audio: {
+            dataUrl: pendingRecordedAudio.dataUrl,
+            mimeType: pendingRecordedAudio.mimeType,
+            durationMs: pendingRecordedAudio.durationMs,
+            transcript: transcriptText || undefined,
+          },
+        }
+      : undefined
     setInput("")
     setLoading(true)
 
@@ -88,8 +109,9 @@ export function LeaderCopilotChat({
       sender: "user",
       content: messageText,
       created_at: new Date().toISOString(),
-      metadata: {},
+      metadata: messageMetadata ?? {},
     }
+    const optimisticUserId = optimisticUser.id
 
     setMessages((prev) => [...prev, optimisticUser])
 
@@ -100,7 +122,8 @@ export function LeaderCopilotChat({
         body: JSON.stringify({
           workspaceId,
           conversationId: selectedId ?? undefined,
-          message: messageText,
+          message: apiMessageText,
+          messageMetadata,
         }),
       })
 
@@ -113,6 +136,23 @@ export function LeaderCopilotChat({
           variant: "destructive",
         })
         return
+      }
+
+      if (result.userMessage) {
+        setMessages((prev) =>
+          prev.map((msg) =>
+            msg.id === optimisticUserId
+              ? {
+                  ...msg,
+                  content: result.userMessage,
+                  metadata:
+                    result.userMessageMetadata && typeof result.userMessageMetadata === "object"
+                      ? result.userMessageMetadata
+                      : msg.metadata,
+                }
+              : msg
+          )
+        )
       }
 
       const assistantMessage: LeaderConversationMessage = {
@@ -137,6 +177,7 @@ export function LeaderCopilotChat({
         setPendingActions(actions)
       }
 
+      setPendingRecordedAudio(null)
       await refreshConversations()
     } catch (error) {
       toast({
@@ -285,6 +326,11 @@ export function LeaderCopilotChat({
                 >
                   <p className="mb-1 text-xs text-muted-foreground">{msg.sender === "user" ? "Você" : "Copiloto"}</p>
                   <p className="whitespace-pre-wrap">{msg.content}</p>
+                  {(() => {
+                    const audio = getChatAudioMetadata(msg.metadata)
+                    if (!audio) return null
+                    return <ChatAudioPlayer audio={audio} className="mt-2" />
+                  })()}
                 </div>
               ))}
               {loading && (
@@ -295,6 +341,45 @@ export function LeaderCopilotChat({
           </ScrollArea>
 
           <div className="space-y-2">
+            <AudioRecorderControl
+              disabled={loading}
+              onRecorded={(draft) => {
+                setPendingRecordedAudio(draft)
+                if (!input.trim() && draft.transcript) {
+                  setInput(draft.transcript)
+                }
+              }}
+              onError={(description) =>
+                toast({ title: "Áudio", description, variant: "destructive" })
+              }
+            />
+            {pendingRecordedAudio && (
+              <div className="space-y-2 rounded-lg border border-border bg-muted/30 p-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-sm font-medium">Áudio pronto para envio</p>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => setPendingRecordedAudio(null)}
+                      disabled={loading}
+                    >
+                      Cancelar e apagar
+                    </Button>
+                    <Button type="button" size="sm" onClick={handleSend} disabled={loading}>
+                      Enviar áudio
+                    </Button>
+                  </div>
+                </div>
+                <ChatAudioPlayer audio={pendingRecordedAudio} />
+                {!pendingRecordedAudio.transcript && (
+                  <p className="text-xs text-muted-foreground">
+                    Você pode enviar só o áudio. A transcrição será feita no backend antes de chamar a IA.
+                  </p>
+                )}
+              </div>
+            )}
             <Textarea
               value={input}
               onChange={(event) => setInput(event.target.value)}
@@ -302,7 +387,7 @@ export function LeaderCopilotChat({
               rows={4}
             />
             <div className="flex justify-end">
-              <Button onClick={handleSend} disabled={loading || !input.trim()}>
+              <Button onClick={handleSend} disabled={loading || (!input.trim() && !pendingRecordedAudio)}>
                 Enviar
               </Button>
             </div>

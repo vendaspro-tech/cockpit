@@ -6,6 +6,7 @@ import { getSystemSettings } from "@/app/actions/admin/settings"
 import { retrieveKbContext } from "@/lib/ai/kb/retrieval"
 import { processPendingKbSources } from "@/lib/ai/kb/ingestion"
 import { createOpenRouterClient, getOpenRouterApiKey, normalizeOpenRouterModel } from "@/lib/ai/openrouter"
+import { transcribeChatAudio } from "@/lib/ai/chat-audio-server"
 
 export const runtime = "nodejs"
 
@@ -13,7 +14,20 @@ const ChatRequestSchema = z.object({
   agentId: z.string().uuid(),
   workspaceId: z.string().uuid(),
   conversationId: z.string().uuid().optional(),
-  message: z.string().min(1).max(8000),
+  message: z.string().max(8000).default(""),
+  messageMetadata: z
+    .object({
+      audio: z
+        .object({
+          dataUrl: z.string().startsWith("data:audio/").max(3_000_000),
+          mimeType: z.string().min(1).max(100),
+          durationMs: z.number().int().min(0).max(120_000),
+          transcript: z.string().min(1).max(8000).optional(),
+        })
+        .optional(),
+    })
+    .passthrough()
+    .optional(),
   rag: z
     .object({
       limit: z.number().min(1).max(20).optional(),
@@ -22,6 +36,10 @@ const ChatRequestSchema = z.object({
     })
     .optional(),
 })
+  .refine((data) => data.message.trim().length > 0 || Boolean(data.messageMetadata?.audio), {
+    message: "Mensagem ou áudio é obrigatório",
+    path: ["message"],
+  })
 
 function needsInternalKbGrounding(message: string) {
   return /(no documento|nos documentos|na base|na metodologia|segundo o material|segundo os docs|transcri|aula|playbook|processo de vendas|metodologia|framework|no treinamento)/i.test(
@@ -48,7 +66,33 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Não autorizado" }, { status: 401 })
     }
 
-    const { agentId, workspaceId, conversationId, message, rag } = parsed.data
+    const { agentId, workspaceId, conversationId, message, messageMetadata, rag } = parsed.data
+    const typedMessage = message.trim()
+    let resolvedUserMessage = typedMessage
+    let resolvedUserMetadata = messageMetadata ?? {}
+
+    if (messageMetadata?.audio) {
+      try {
+        const backendTranscript = await transcribeChatAudio(messageMetadata.audio)
+        if (!typedMessage) {
+          resolvedUserMessage = backendTranscript
+        }
+        resolvedUserMetadata = {
+          ...resolvedUserMetadata,
+          audio: {
+            ...messageMetadata.audio,
+            transcript: backendTranscript || messageMetadata.audio.transcript,
+          },
+        }
+      } catch (error) {
+        console.error("Chat audio transcription error:", error)
+        return NextResponse.json({ error: "Não foi possível transcrever o áudio" }, { status: 400 })
+      }
+    }
+
+    if (!resolvedUserMessage) {
+      return NextResponse.json({ error: "Não foi possível gerar texto a partir do áudio" }, { status: 400 })
+    }
 
     const { data: agent, error: agentError } = await supabase
       .from("ai_agents")
@@ -91,7 +135,7 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: "Conversa inválida" }, { status: 403 })
       }
     } else {
-      const title = message.length > 60 ? `${message.slice(0, 60)}...` : message
+      const title = resolvedUserMessage.length > 60 ? `${resolvedUserMessage.slice(0, 60)}...` : resolvedUserMessage
       const { data: newConversation, error: createError } = await supabase
         .from("ai_conversations")
         .insert({
@@ -116,8 +160,8 @@ export async function POST(request: NextRequest) {
       .insert({
         conversation_id: resolvedConversationId,
         sender: "user",
-        content: message,
-        metadata: {},
+        content: resolvedUserMessage,
+        metadata: resolvedUserMetadata,
       })
 
     if (messageError) {
@@ -161,7 +205,7 @@ export async function POST(request: NextRequest) {
 
     const runRetrieval = async () => {
       const retrieval = await retrieveKbContext(supabase, openai, {
-        query: message,
+        query: resolvedUserMessage,
         agentId,
         limit: rag?.limit ?? 12,
         similarityThreshold: rag?.similarityThreshold ?? 0.55,
@@ -250,7 +294,7 @@ export async function POST(request: NextRequest) {
         content: msg.content,
       })) as Array<{ role: "user" | "assistant"; content: string }>
 
-    const requiresKbGrounding = needsInternalKbGrounding(message)
+    const requiresKbGrounding = needsInternalKbGrounding(resolvedUserMessage)
     const ragGuardrail = ragResults.length
       ? `\n\n## REGRAS DE RESPOSTA COM BASE\n- Use prioritariamente os trechos em CONTEXTO RELEVANTE para responder.\n- Não contradiga os trechos recuperados.\n- Quando possível, cite explicitamente o nome da fonte e o trecho.\n- Se faltar detalhe no contexto, diga o que faltou antes de assumir.`
       : requiresKbGrounding
@@ -320,6 +364,8 @@ export async function POST(request: NextRequest) {
       success: true,
       conversationId: resolvedConversationId,
       message: assistantText,
+      userMessage: resolvedUserMessage,
+      userMessageMetadata: resolvedUserMetadata,
       ragCount: ragResults.length,
     })
   } catch (error) {

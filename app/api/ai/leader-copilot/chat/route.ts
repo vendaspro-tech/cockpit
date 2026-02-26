@@ -5,13 +5,30 @@ import { createClient } from "@/lib/supabase/server"
 import { ensureSupabaseUser } from "@/lib/supabase/user"
 import { assertLeaderEligible, canAccessLeaderCopilot } from "@/lib/leader-scope"
 import { getLeaderCopilotAgentId, runLeaderCopilotTurn } from "@/lib/ai/leader-copilot-agent"
+import { transcribeChatAudio } from "@/lib/ai/chat-audio-server"
 
 export const runtime = "nodejs"
 
 const ChatRequestSchema = z.object({
   workspaceId: z.string().uuid(),
   conversationId: z.string().uuid().optional(),
-  message: z.string().min(1).max(8000),
+  message: z.string().max(8000).default(""),
+  messageMetadata: z
+    .object({
+      audio: z
+        .object({
+          dataUrl: z.string().startsWith("data:audio/").max(3_000_000),
+          mimeType: z.string().min(1).max(100),
+          durationMs: z.number().int().min(0).max(120_000),
+          transcript: z.string().min(1).max(8000).optional(),
+        })
+        .optional(),
+    })
+    .passthrough()
+    .optional(),
+}).refine((data) => data.message.trim().length > 0 || Boolean(data.messageMetadata?.audio), {
+  message: "Mensagem ou áudio é obrigatório",
+  path: ["message"],
 })
 
 export async function POST(request: NextRequest) {
@@ -30,7 +47,33 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Não autorizado" }, { status: 401 })
     }
 
-    const { workspaceId, conversationId, message } = parsed.data
+    const { workspaceId, conversationId, message, messageMetadata } = parsed.data
+    const typedMessage = message.trim()
+    let resolvedUserMessage = typedMessage
+    let resolvedUserMetadata = messageMetadata ?? {}
+
+    if (messageMetadata?.audio) {
+      try {
+        const backendTranscript = await transcribeChatAudio(messageMetadata.audio)
+        if (!typedMessage) {
+          resolvedUserMessage = backendTranscript
+        }
+        resolvedUserMetadata = {
+          ...resolvedUserMetadata,
+          audio: {
+            ...messageMetadata.audio,
+            transcript: backendTranscript || messageMetadata.audio.transcript,
+          },
+        }
+      } catch (error) {
+        console.error("Leader chat audio transcription error:", error)
+        return NextResponse.json({ error: "Não foi possível transcrever o áudio" }, { status: 400 })
+      }
+    }
+
+    if (!resolvedUserMessage) {
+      return NextResponse.json({ error: "Não foi possível gerar texto a partir do áudio" }, { status: 400 })
+    }
 
     const hasAccess = await canAccessLeaderCopilot(workspaceId, authData.user.id, supabase)
     if (!hasAccess) {
@@ -81,7 +124,7 @@ export async function POST(request: NextRequest) {
           workspace_id: workspaceId,
           user_id: internalUserId,
           agent_id: agentId,
-          title: message.length > 60 ? `${message.slice(0, 60)}...` : message,
+          title: resolvedUserMessage.length > 60 ? `${resolvedUserMessage.slice(0, 60)}...` : resolvedUserMessage,
           last_message_at: new Date().toISOString(),
         })
         .select("id")
@@ -101,8 +144,8 @@ export async function POST(request: NextRequest) {
     const { error: userMessageError } = await supabase.from("ai_messages").insert({
       conversation_id: resolvedConversationId,
       sender: "user",
-      content: message,
-      metadata: {},
+      content: resolvedUserMessage,
+      metadata: resolvedUserMetadata,
     })
 
     if (userMessageError) {
@@ -114,7 +157,7 @@ export async function POST(request: NextRequest) {
       conversationId: resolvedConversationId,
       actorAuthUserId: authData.user.id,
       actorInternalUserId: internalUserId,
-      message,
+      message: resolvedUserMessage,
       client: supabase,
     })
 
@@ -145,6 +188,8 @@ export async function POST(request: NextRequest) {
         success: true,
         type: "pending_action",
         conversationId: resolvedConversationId,
+        userMessage: resolvedUserMessage,
+        userMessageMetadata: resolvedUserMetadata,
         message: result.message,
         pendingAction: result.pendingAction,
       })
@@ -154,6 +199,8 @@ export async function POST(request: NextRequest) {
       success: true,
       type: "answer",
       conversationId: resolvedConversationId,
+      userMessage: resolvedUserMessage,
+      userMessageMetadata: resolvedUserMetadata,
       message: result.message,
     })
   } catch (error) {

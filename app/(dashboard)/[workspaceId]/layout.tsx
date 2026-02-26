@@ -15,9 +15,12 @@ import {
 import { DashboardBreadcrumb } from "@/components/dashboard-breadcrumb"
 import { getAuthUser } from "@/lib/auth-server"
 import { getUserRole } from "@/lib/auth-utils"
+import { isHotmartAccessControlEnabled } from "@/lib/feature-flags"
+import { getWorkspaceHotmartAccessStatus } from "@/lib/hotmart/access"
 import { canAccessLeaderCopilot } from "@/lib/leader-scope"
 import { getPlatformFeedbackPromptState } from "@/app/actions/platform-feedback"
 import { PlatformFeedbackDialog } from "@/components/shared/platform-feedback-dialog"
+import { getHotmartSubscriptionUrl } from "@/lib/hotmart/config"
 
 interface DashboardLayoutProps {
   children: React.ReactNode
@@ -57,10 +60,44 @@ export default async function DashboardLayout({
     redirect('/') // Workspace not found
   }
   
-  const userRole = await getUserRole(user.id, workspaceId, { createIfMissing: true })
+  const userRole = await getUserRole(user.id, workspaceId)
   
   if (!userRole) {
     redirect('/') // User not a member of this workspace
+  }
+
+  const hotmartFeatureEnabled = isHotmartAccessControlEnabled()
+  if (hotmartFeatureEnabled) {
+    const hotmartStatus = await getWorkspaceHotmartAccessStatus(workspaceId)
+    if (hotmartStatus !== "active") {
+      const subscriptionUrl = getHotmartSubscriptionUrl()
+
+      return (
+        <div className="min-h-screen bg-[#0a0a0a] text-white flex items-center justify-center p-6">
+          <div className="w-full max-w-xl rounded-2xl border border-white/10 bg-white/5 p-8 text-center space-y-4">
+            <h1 className="text-2xl font-bold">Acesso ao workspace bloqueado</h1>
+            <p className="text-gray-300">
+              Este workspace está com a assinatura Hotmart inativa ou pendente de verificação.
+            </p>
+            <p className="text-sm text-gray-400">
+              Peça ao proprietário do workspace para regularizar a assinatura.
+            </p>
+            <div className="flex flex-col sm:flex-row gap-3 justify-center pt-2">
+              <Button asChild variant="outline" className="border-white/20 bg-white/5 text-white hover:bg-white/10">
+                <Link href="/">Voltar</Link>
+              </Button>
+              {subscriptionUrl ? (
+                <Button asChild className="bg-[#A08D5A] hover:bg-[#8c7b4d] text-white">
+                  <Link href={subscriptionUrl} target="_blank" rel="noreferrer">
+                    Assinar plano
+                  </Link>
+                </Button>
+              ) : null}
+            </div>
+          </div>
+        </div>
+      )
+    }
   }
 
   const [workspaces, alerts, feedbackPromptState, showLeaderCopilot] = await Promise.all([

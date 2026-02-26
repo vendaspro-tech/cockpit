@@ -4,6 +4,10 @@ import { revalidatePath } from "next/cache"
 import { z } from "zod"
 
 import { getUserRole } from "@/lib/auth-utils"
+import { isHotmartAccessControlEnabled } from "@/lib/feature-flags"
+import { countOwnedWorkspaces, upsertWorkspaceHotmartAccess } from "@/lib/hotmart/access"
+import { getHotmartSubscriptionUrl } from "@/lib/hotmart/config"
+import { checkHotmartEligibilityByEmail } from "@/lib/hotmart/service"
 import { ensureSupabaseUser } from "@/lib/supabase/user"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { createClient } from "@/lib/supabase/server"
@@ -28,12 +32,72 @@ export async function createWorkspace(name: string, _token?: string) {
   }
 
   const supabase = createAdminClient()
+  const hotmartFeatureEnabled = isHotmartAccessControlEnabled()
+  const checkoutUrl = getHotmartSubscriptionUrl()
 
   // 1. Ensure the user exists in Supabase (webhook can fail in preview/prod)
   const { userId: supabaseUserId, error: syncError } = await ensureSupabaseUser(authUserId)
 
   if (!supabaseUserId) {
     return { error: syncError || 'Não foi possível sincronizar seu usuário. Saia e entre novamente.' }
+  }
+
+  let ownerEmail: string | null = null
+  let hotmartEligibility:
+    | Awaited<ReturnType<typeof checkHotmartEligibilityByEmail>>
+    | null = null
+
+  if (hotmartFeatureEnabled) {
+    const { data: ownerUser, error: ownerUserError } = await supabase
+      .from("users")
+      .select("id, email")
+      .eq("id", supabaseUserId)
+      .maybeSingle()
+
+    if (ownerUserError || !ownerUser) {
+      console.error("Error loading owner user for Hotmart validation:", ownerUserError)
+      return {
+        error: "Não foi possível validar sua assinatura agora. Tente novamente em instantes.",
+        code: "HOTMART_API_UNAVAILABLE",
+        checkoutUrl,
+      }
+    }
+
+    ownerEmail = ownerUser.email?.trim().toLowerCase() || null
+    if (!ownerEmail) {
+      return {
+        error: "Seu usuário não possui e-mail válido para validação da assinatura.",
+        code: "HOTMART_INACTIVE",
+        checkoutUrl,
+      }
+    }
+
+    const ownedWorkspaceCount = await countOwnedWorkspaces(supabaseUserId)
+    if (ownedWorkspaceCount > 0) {
+      return {
+        error: "Seu plano atual libera apenas 1 workspace. Para criar outro, faça uma nova assinatura.",
+        code: "HOTMART_SECOND_WORKSPACE_REQUIRES_SUBSCRIPTION",
+        checkoutUrl,
+      }
+    }
+
+    hotmartEligibility = await checkHotmartEligibilityByEmail(ownerEmail)
+
+    if (hotmartEligibility.reasonCode === "API_ERROR") {
+      return {
+        error: "Não foi possível validar sua assinatura Hotmart agora. Tente novamente em instantes.",
+        code: "HOTMART_API_UNAVAILABLE",
+        checkoutUrl,
+      }
+    }
+
+    if (!hotmartEligibility.hasEligibleActivePlan) {
+      return {
+        error: "Não encontramos uma assinatura ativa elegível na Hotmart para este e-mail.",
+        code: "HOTMART_INACTIVE",
+        checkoutUrl,
+      }
+    }
   }
 
   // 2. Create Workspace
@@ -88,6 +152,28 @@ export async function createWorkspace(name: string, _token?: string) {
     // Cleanup workspace if member creation fails? 
     // For now, just return error, but ideally we should transaction this or cleanup.
     return { error: 'Erro ao definir permissões do workspace' }
+  }
+
+  if (hotmartFeatureEnabled && ownerEmail && hotmartEligibility) {
+    try {
+      await upsertWorkspaceHotmartAccess({
+        workspaceId: workspace.id,
+        ownerUserId: supabaseUserId,
+        ownerEmail,
+        status: "active",
+        lastVerifiedSource: "onboarding",
+        lastStatusReason: hotmartEligibility.reasonCode,
+        hotmartCustomerId: hotmartEligibility.hotmartCustomerId ?? null,
+        hotmartSubscriptionId: hotmartEligibility.subscriptionId ?? null,
+        hotmartProductId: hotmartEligibility.matchedProductId ?? null,
+        hotmartOfferId: hotmartEligibility.matchedOfferId ?? null,
+        rawResponse: hotmartEligibility.raw ?? null,
+        lastErrorMessage: null,
+        lastErrorAt: null,
+      })
+    } catch (hotmartPersistError) {
+      console.error("Error persisting Hotmart access status after onboarding:", hotmartPersistError)
+    }
   }
 
   return { success: true, workspaceId: workspace.id }

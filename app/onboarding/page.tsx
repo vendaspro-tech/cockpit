@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from "react"
+import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -17,6 +18,7 @@ export default function OnboardingPage() {
   const [name, setName] = useState("")
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState("")
+  const [checkoutUrl, setCheckoutUrl] = useState<string | null>(null)
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -31,6 +33,7 @@ export default function OnboardingPage() {
 
     setIsLoading(true)
     setError("")
+    setCheckoutUrl(null)
 
     try {
       const { data } = await supabase.auth.getSession()
@@ -39,6 +42,7 @@ export default function OnboardingPage() {
 
       if (result.error) {
         setError(result.error)
+        setCheckoutUrl(typeof result.checkoutUrl === "string" ? result.checkoutUrl : null)
       } else if (result.success && result.workspaceId) {
         router.push(`/${result.workspaceId}/overview`)
       }
@@ -92,6 +96,13 @@ export default function OnboardingPage() {
           {error && (
             <div className="p-4 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-sm text-center space-y-3">
               <p>{error}</p>
+              {checkoutUrl && (
+                <Button asChild className="w-full bg-[#A08D5A] hover:bg-[#8c7b4d] text-white">
+                  <Link href={checkoutUrl} target="_blank" rel="noreferrer">
+                    Assinar plano
+                  </Link>
+                </Button>
+              )}
               {error.includes("Não autorizado") && (
                 <Button 
                   type="button" 

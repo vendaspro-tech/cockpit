@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from "next/server"
 import { z } from "zod"
-import { OpenAI } from "openai"
 import { createClient } from "@/lib/supabase/server"
 import { ensureSupabaseUser } from "@/lib/supabase/user"
 import { isSystemOwner } from "@/lib/auth-utils"
 import { getSystemSettings } from "@/app/actions/admin/settings"
 import { retrieveKbContext } from "@/lib/ai/kb/retrieval"
 import { processPendingKbSources } from "@/lib/ai/kb/ingestion"
+import { createOpenRouterClient, getOpenRouterApiKey, normalizeOpenRouterModel } from "@/lib/ai/openrouter"
 
 export const runtime = "nodejs"
 
@@ -124,22 +124,25 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Erro ao salvar mensagem" }, { status: 500 })
     }
 
-    const openaiKey = process.env.OPENAI_API_KEY
-    if (!openaiKey) {
-      return NextResponse.json({ error: "OPENAI_API_KEY ausente no servidor" }, { status: 500 })
+    let openRouterKey: string
+    try {
+      openRouterKey = getOpenRouterApiKey()
+    } catch {
+      return NextResponse.json({ error: "OPENROUTER_API_KEY ausente no servidor" }, { status: 500 })
     }
 
     const settings = await getSystemSettings()
-    if (settings?.provider && settings.provider !== "openai") {
+    if (settings?.provider && settings.provider !== "openrouter") {
       return NextResponse.json({ error: "Provedor configurado não suportado nesta versão" }, { status: 400 })
     }
 
-    const model =
-      agent.model ||
-      (settings?.model && settings.provider === "openai" ? settings.model : "gpt-4o-mini")
-    const openai = new OpenAI({ apiKey: openaiKey })
+    const model = normalizeOpenRouterModel(
+      agent.model || (settings?.model && settings.provider === "openrouter" ? settings.model : undefined),
+      "openai/gpt-4o-mini"
+    )
+    const openai = createOpenRouterClient()
 
-    await processPendingKbSources({ agentId, limit: 1 }, openaiKey).catch((error) => {
+    await processPendingKbSources({ agentId, limit: 1 }, openRouterKey).catch((error) => {
       console.error("KB opportunistic processing failed (admin chat):", error)
     })
 
@@ -196,7 +199,7 @@ export async function POST(request: NextRequest) {
         failedSources = failedQuery.count || 0
 
         if (pendingSources > 0) {
-          await processPendingKbSources({ agentId, limit: 5 }, openaiKey).catch((error) => {
+          await processPendingKbSources({ agentId, limit: 5 }, openRouterKey).catch((error) => {
             console.error("KB follow-up processing failed (admin chat):", error)
           })
           await runRetrieval()
@@ -219,11 +222,31 @@ export async function POST(request: NextRequest) {
         : ""
     }`
 
+    const { data: recentMessages, error: historyError } = await supabase
+      .from("ai_admin_agent_messages")
+      .select("sender, content")
+      .eq("conversation_id", conversationIdResolved)
+      .order("created_at", { ascending: false })
+      .limit(12)
+
+    if (historyError) {
+      console.error("Admin conversation history fetch error:", historyError)
+    }
+
+    const conversationHistory = (recentMessages ?? [])
+      .slice()
+      .reverse()
+      .filter((msg) => (msg.sender === "user" || msg.sender === "assistant") && typeof msg.content === "string")
+      .map((msg) => ({
+        role: msg.sender === "user" ? "user" : "assistant",
+        content: msg.content,
+      })) as Array<{ role: "user" | "assistant"; content: string }>
+
     const completion = await openai.chat.completions.create({
       model,
       messages: [
         { role: "system", content: systemPrompt },
-        { role: "user", content: message },
+        ...conversationHistory,
       ],
       temperature: typeof agent.temperature === "number" ? agent.temperature : 0.7,
       max_tokens: 1200,

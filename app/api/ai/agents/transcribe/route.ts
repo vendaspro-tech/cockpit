@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
-import { OpenAI } from "openai"
+import { createOpenRouterClient, getOpenRouterTranscriptionModel } from "@/lib/ai/openrouter"
 
 export const runtime = "nodejs"
 
@@ -19,14 +19,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Arquivo de áudio inválido" }, { status: 400 })
     }
 
-    const openaiKey = process.env.OPENAI_API_KEY
-    if (!openaiKey) {
-      return NextResponse.json({ error: "OPENAI_API_KEY ausente no servidor" }, { status: 500 })
-    }
-
-    const openai = new OpenAI({ apiKey: openaiKey })
+    const openai = createOpenRouterClient()
     const transcription = await openai.audio.transcriptions.create({
-      model: "whisper-1",
+      model: getOpenRouterTranscriptionModel(),
       file,
       language: "pt",
     })

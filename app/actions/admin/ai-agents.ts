@@ -8,6 +8,7 @@ import { ensureSupabaseUser } from "@/lib/supabase/user"
 import { revalidatePath } from "next/cache"
 import { enqueueKbSource, processPendingKbSources } from "@/lib/ai/kb/ingestion"
 import { sha256 } from "@/lib/ai/kb/chunking"
+import { getOpenRouterApiKey } from "@/lib/ai/openrouter"
 
 const AgentDocumentTypeSchema = z.enum(["transcript", "pdi", "assessment", "document", "image_extracted"])
 
@@ -299,8 +300,12 @@ export async function createAgentDocument(
   const parsed = AgentDocumentSchema.safeParse(input)
   if (!parsed.success) return { error: parsed.error.message }
 
-  const openaiKey = process.env.OPENAI_API_KEY
-  if (!openaiKey) return { error: "OPENAI_API_KEY ausente no servidor" }
+  let openRouterKey: string
+  try {
+    openRouterKey = getOpenRouterApiKey()
+  } catch {
+    return { error: "OPENROUTER_API_KEY ausente no servidor" }
+  }
 
   try {
     const { source } = await enqueueKbSource({
@@ -315,7 +320,7 @@ export async function createAgentDocument(
       },
     })
 
-    await processPendingKbSources({ sourceId: source.id, limit: 1 }, openaiKey)
+    await processPendingKbSources({ sourceId: source.id, limit: 1 }, openRouterKey)
   } catch (error) {
     console.error("Error creating agent doc:", error)
     return { error: "Erro ao adicionar documento" }
@@ -336,8 +341,12 @@ export async function updateAgentDocument(
   const parsed = AgentDocumentSchema.safeParse(input)
   if (!parsed.success) return { error: parsed.error.message }
 
-  const openaiKey = process.env.OPENAI_API_KEY
-  if (!openaiKey) return { error: "OPENAI_API_KEY ausente no servidor" }
+  let openRouterKey: string
+  try {
+    openRouterKey = getOpenRouterApiKey()
+  } catch {
+    return { error: "OPENROUTER_API_KEY ausente no servidor" }
+  }
 
   const supabase = createAdminClient()
   const { error } = await supabase
@@ -365,7 +374,7 @@ export async function updateAgentDocument(
 
   await supabase.from("ai_agent_kb_chunks").delete().eq("source_id", documentId)
   try {
-    await processPendingKbSources({ sourceId: documentId, limit: 1 }, openaiKey)
+    await processPendingKbSources({ sourceId: documentId, limit: 1 }, openRouterKey)
   } catch (processingError) {
     console.error("Error reindexing agent doc:", processingError)
     return { error: "Documento atualizado, mas falhou no reprocessamento" }

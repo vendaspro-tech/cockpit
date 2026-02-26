@@ -9,6 +9,7 @@
 
 import { createClient } from '@supabase/supabase-js';
 import { OpenAI } from 'openai';
+import { createOpenRouterClient, getOpenRouterApiKey, getOpenRouterEmbeddingModel } from '@/lib/ai/openrouter';
 
 export interface RagDocument {
   id: string;
@@ -65,10 +66,10 @@ export class SupabaseRAG {
   constructor(
     supabaseUrl: string,
     supabaseKey: string,
-    openaiApiKey: string
+    _openRouterApiKey: string
   ) {
     this.supabase = createClient(supabaseUrl, supabaseKey);
-    this.openai = new OpenAI({ apiKey: openaiApiKey });
+    this.openai = createOpenRouterClient();
   }
 
   /**
@@ -88,9 +89,9 @@ export class SupabaseRAG {
       metadata = {},
     } = params;
 
-    // Generate embedding using OpenAI
+    // Generate embedding using OpenRouter (OpenAI-compatible API)
     const embeddingResponse = await this.openai.embeddings.create({
-      model: 'text-embedding-3-small',
+      model: getOpenRouterEmbeddingModel(),
       input: content,
     });
 
@@ -164,7 +165,7 @@ export class SupabaseRAG {
 
     // Generate embedding for the query
     const queryEmbeddingResponse = await this.openai.embeddings.create({
-      model: 'text-embedding-3-small',
+      model: getOpenRouterEmbeddingModel(),
       input: query,
     });
 
@@ -388,11 +389,16 @@ export class SupabaseRAG {
 export function createSupabaseRAG(): SupabaseRAG {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  const openaiKey = process.env.OPENAI_API_KEY;
+  let openRouterKey: string;
+  try {
+    openRouterKey = getOpenRouterApiKey();
+  } catch {
+    throw new Error('Missing required environment variables for RAG initialization (OPENROUTER_API_KEY)');
+  }
 
-  if (!supabaseUrl || !supabaseKey || !openaiKey) {
+  if (!supabaseUrl || !supabaseKey) {
     throw new Error('Missing required environment variables for RAG initialization');
   }
 
-  return new SupabaseRAG(supabaseUrl, supabaseKey, openaiKey);
+  return new SupabaseRAG(supabaseUrl, supabaseKey, openRouterKey);
 }

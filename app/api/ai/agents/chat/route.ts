@@ -2,10 +2,10 @@ import { NextRequest, NextResponse } from "next/server"
 import { z } from "zod"
 import { createClient } from "@/lib/supabase/server"
 import { ensureSupabaseUser } from "@/lib/supabase/user"
-import { OpenAI } from "openai"
 import { getSystemSettings } from "@/app/actions/admin/settings"
 import { retrieveKbContext } from "@/lib/ai/kb/retrieval"
 import { processPendingKbSources } from "@/lib/ai/kb/ingestion"
+import { createOpenRouterClient, getOpenRouterApiKey, normalizeOpenRouterModel } from "@/lib/ai/openrouter"
 
 export const runtime = "nodejs"
 
@@ -124,22 +124,25 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Erro ao salvar mensagem" }, { status: 500 })
     }
 
-    const openaiKey = process.env.OPENAI_API_KEY
-    if (!openaiKey) {
-      return NextResponse.json({ error: "OPENAI_API_KEY ausente no servidor" }, { status: 500 })
+    let openRouterKey: string
+    try {
+      openRouterKey = getOpenRouterApiKey()
+    } catch (error) {
+      return NextResponse.json({ error: "OPENROUTER_API_KEY ausente no servidor" }, { status: 500 })
     }
 
     const settings = await getSystemSettings()
-    if (settings?.provider && settings.provider !== "openai") {
+    if (settings?.provider && settings.provider !== "openrouter") {
       return NextResponse.json({ error: "Provedor configurado não suportado nesta versão" }, { status: 400 })
     }
 
-    const model =
-      agent.model ||
-      (settings?.model && settings.provider === "openai" ? settings.model : "gpt-4o-mini")
-    const openai = new OpenAI({ apiKey: openaiKey })
+    const model = normalizeOpenRouterModel(
+      agent.model || (settings?.model && settings.provider === "openrouter" ? settings.model : undefined),
+      "openai/gpt-4o-mini"
+    )
+    const openai = createOpenRouterClient()
 
-    await processPendingKbSources({ agentId, limit: 1 }, openaiKey).catch((error) => {
+    await processPendingKbSources({ agentId, limit: 1 }, openRouterKey).catch((error) => {
       console.error("KB opportunistic processing failed:", error)
     })
 
@@ -197,7 +200,7 @@ export async function POST(request: NextRequest) {
         failedSources = failedQuery.count || 0
 
         if (pendingSources > 0) {
-          await processPendingKbSources({ agentId, limit: 5 }, openaiKey).catch((error) => {
+          await processPendingKbSources({ agentId, limit: 5 }, openRouterKey).catch((error) => {
             console.error("KB follow-up processing failed:", error)
           })
           await runRetrieval()
@@ -227,6 +230,26 @@ export async function POST(request: NextRequest) {
       })
       .join("\n\n---\n\n")
 
+    const { data: recentMessages, error: historyError } = await supabase
+      .from("ai_messages")
+      .select("sender, content")
+      .eq("conversation_id", resolvedConversationId)
+      .order("created_at", { ascending: false })
+      .limit(12)
+
+    if (historyError) {
+      console.error("Conversation history fetch error:", historyError)
+    }
+
+    const conversationHistory = (recentMessages ?? [])
+      .slice()
+      .reverse()
+      .filter((msg) => (msg.sender === "user" || msg.sender === "assistant") && typeof msg.content === "string")
+      .map((msg) => ({
+        role: msg.sender === "user" ? "user" : "assistant",
+        content: msg.content,
+      })) as Array<{ role: "user" | "assistant"; content: string }>
+
     const requiresKbGrounding = needsInternalKbGrounding(message)
     const ragGuardrail = ragResults.length
       ? `\n\n## REGRAS DE RESPOSTA COM BASE\n- Use prioritariamente os trechos em CONTEXTO RELEVANTE para responder.\n- Não contradiga os trechos recuperados.\n- Quando possível, cite explicitamente o nome da fonte e o trecho.\n- Se faltar detalhe no contexto, diga o que faltou antes de assumir.`
@@ -248,7 +271,7 @@ export async function POST(request: NextRequest) {
       model,
       messages: [
         { role: "system", content: systemPrompt },
-        { role: "user", content: message },
+        ...conversationHistory,
       ],
       temperature: typeof agent.temperature === "number" ? agent.temperature : 0.7,
       max_tokens: 1200,

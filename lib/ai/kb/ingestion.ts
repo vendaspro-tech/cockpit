@@ -1,5 +1,6 @@
 import pdfParse from "pdf-parse"
 import { OpenAI } from "openai"
+import { createOpenRouterClient, getOpenRouterEmbeddingModel } from "@/lib/ai/openrouter"
 
 import { KB_PROCESS_BATCH_SIZE } from "@/lib/ai/kb/constants"
 import { normalizeKbText, sha256, splitTextIntoChunks } from "@/lib/ai/kb/chunking"
@@ -81,7 +82,7 @@ async function getSourceContentBuffer(source: KbSourceRow): Promise<Buffer> {
 
 async function embedChunks(openai: OpenAI, chunks: string[]) {
   const response = await openai.embeddings.create({
-    model: "text-embedding-3-small",
+    model: getOpenRouterEmbeddingModel(),
     input: chunks,
   })
   return response.data.map((item) => item.embedding)
@@ -149,9 +150,9 @@ export async function enqueueKbSource(params: {
   return { source: data as KbSourceRow, deduplicated: false }
 }
 
-export async function processKbSource(sourceId: string, openaiApiKey: string): Promise<{ chunks: number }> {
+export async function processKbSource(sourceId: string, _openRouterApiKey: string): Promise<{ chunks: number }> {
   const supabase = createAdminClient()
-  const openai = new OpenAI({ apiKey: openaiApiKey })
+  const openai = createOpenRouterClient()
 
   const { data: source, error: sourceError } = await supabase
     .from("ai_agent_kb_sources")

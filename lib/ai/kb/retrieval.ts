@@ -1,5 +1,6 @@
 import { OpenAI } from "openai"
 import type { SupabaseClient } from "@supabase/supabase-js"
+import { getOpenRouterEmbeddingModel } from "@/lib/ai/openrouter"
 
 import {
   KB_CONTEXT_TOKEN_BUDGET,
@@ -89,7 +90,7 @@ export async function retrieveKbContext(
   options: RetrieveOptions
 ): Promise<RetrievalResult> {
   const embeddingResponse = await openai.embeddings.create({
-    model: "text-embedding-3-small",
+    model: getOpenRouterEmbeddingModel(),
     input: options.query,
   })
 

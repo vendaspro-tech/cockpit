@@ -32,8 +32,8 @@ export function AISettingsForm({ initialSettings }: AISettingsFormProps) {
   const { toast } = useToast()
   const [loading, setLoading] = useState(false)
   const [settings, setSettings] = useState<AISettings>({
-    provider: initialSettings?.provider || "google",
-    model: initialSettings?.model || "gemini-1.5-flash",
+    provider: initialSettings?.provider || "openrouter",
+    model: initialSettings?.model || "openai/gpt-4o-mini",
     thinkingMode: initialSettings?.thinkingMode || false,
     searchGrounding: initialSettings?.searchGrounding || false,
     apiKey: initialSettings?.apiKey || "",
@@ -97,7 +97,7 @@ export function AISettingsForm({ initialSettings }: AISettingsFormProps) {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="google">Google Gemini</SelectItem>
-                  <SelectItem value="openai">OpenAI (GPT)</SelectItem>
+                  <SelectItem value="openrouter">OpenRouter</SelectItem>
                   <SelectItem value="anthropic">Anthropic (Claude)</SelectItem>
                 </SelectContent>
               </Select>
@@ -118,8 +118,8 @@ export function AISettingsForm({ initialSettings }: AISettingsFormProps) {
                 <SelectContent>
                   <SelectItem value="gemini-1.5-flash">Gemini 1.5 Flash - Recomendado ($0.15 / $0.60)</SelectItem>
                   <SelectItem value="gemini-1.5-pro">Gemini 1.5 Pro - Mais Inteligente</SelectItem>
-                  <SelectItem value="gpt-4o-mini">OpenAI GPT-4o mini - Rápido</SelectItem>
-                  <SelectItem value="gpt-4o">OpenAI GPT-4o - Mais potente</SelectItem>
+                  <SelectItem value="openai/gpt-4o-mini">OpenRouter (OpenAI GPT-4o mini) - Rápido</SelectItem>
+                  <SelectItem value="openai/gpt-4o">OpenRouter (OpenAI GPT-4o) - Mais potente</SelectItem>
                 </SelectContent>
               </Select>
             </div>

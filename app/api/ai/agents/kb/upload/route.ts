@@ -5,6 +5,7 @@ import { createAdminClient } from "@/lib/supabase/admin"
 import { isSystemOwner } from "@/lib/auth-utils"
 import { enqueueKbSource, processPendingKbSources } from "@/lib/ai/kb/ingestion"
 import { sha256 } from "@/lib/ai/kb/chunking"
+import { getOpenRouterApiKey } from "@/lib/ai/openrouter"
 import {
   isAllowedKbFile,
   KB_MAX_SIZE_BYTES,
@@ -50,9 +51,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Arquivo acima de 25MB" }, { status: 400 })
     }
 
-    const openaiKey = process.env.OPENAI_API_KEY
-    if (!openaiKey) {
-      return NextResponse.json({ error: "OPENAI_API_KEY ausente no servidor" }, { status: 500 })
+    let openRouterKey: string
+    try {
+      openRouterKey = getOpenRouterApiKey()
+    } catch {
+      return NextResponse.json({ error: "OPENROUTER_API_KEY ausente no servidor" }, { status: 500 })
     }
 
     const buffer = Buffer.from(await file.arrayBuffer())
@@ -90,7 +93,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Best-effort asynchronous kickoff for this source.
-    void processPendingKbSources({ sourceId: source.id, limit: 1 }, openaiKey).catch((error) => {
+    void processPendingKbSources({ sourceId: source.id, limit: 1 }, openRouterKey).catch((error) => {
       console.error("KB async processing kickoff failed:", error)
     })
 

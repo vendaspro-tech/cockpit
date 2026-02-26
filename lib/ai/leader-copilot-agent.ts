@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import OpenAI from "openai"
+import { createOpenRouterClient, normalizeOpenRouterModel } from "@/lib/ai/openrouter"
 
 import { writeAuditLog } from "@/lib/audit"
 import { createAdminClient } from "@/lib/supabase/admin"
@@ -722,9 +723,8 @@ async function executeToolCall(
 }
 
 export async function runLeaderCopilotTurn(params: RunTurnParams): Promise<ToolCallResult> {
-  const openAiKey = process.env.OPENAI_API_KEY
-  if (!openAiKey) {
-    throw new Error("OPENAI_API_KEY ausente no servidor")
+  if (!process.env.OPENROUTER_API_KEY) {
+    throw new Error("OPENROUTER_API_KEY ausente no servidor")
   }
 
   const featureEnabled = await isLeaderCopilotEnabled(params.workspaceId, params.client)
@@ -742,7 +742,7 @@ export async function runLeaderCopilotTurn(params: RunTurnParams): Promise<ToolC
     return directActionResult
   }
 
-  const openai = new OpenAI({ apiKey: openAiKey })
+  const openai = createOpenRouterClient()
 
   const contextPrompt = [
     `workspace: ${params.workspaceId}`,
@@ -761,7 +761,7 @@ export async function runLeaderCopilotTurn(params: RunTurnParams): Promise<ToolC
   ]
 
   const firstCompletion = await openai.chat.completions.create({
-    model: "gpt-4o-mini",
+    model: normalizeOpenRouterModel("gpt-4o-mini"),
     temperature: 0.2,
     messages: baseMessages,
     tools: buildTools(),
@@ -789,7 +789,7 @@ export async function runLeaderCopilotTurn(params: RunTurnParams): Promise<ToolC
       type: "answer",
       message: firstMessage?.content?.trim() || "Não consegui gerar uma resposta agora.",
       metadata: {
-        model: "gpt-4o-mini",
+          model: normalizeOpenRouterModel("gpt-4o-mini"),
       },
     }
   }
@@ -834,14 +834,14 @@ export async function runLeaderCopilotTurn(params: RunTurnParams): Promise<ToolC
       message: "Ação proposta criada. Revise e clique em confirmar para executar.",
       pendingAction,
       metadata: {
-        model: "gpt-4o-mini",
+        model: normalizeOpenRouterModel("gpt-4o-mini"),
         tool_calls: functionToolCalls.map((call) => call.function.name),
       },
     }
   }
 
   const secondCompletion = await openai.chat.completions.create({
-    model: "gpt-4o-mini",
+    model: normalizeOpenRouterModel("gpt-4o-mini"),
     temperature: 0.2,
     messages: [...baseMessages, ...toolMessages],
   })
@@ -852,7 +852,7 @@ export async function runLeaderCopilotTurn(params: RunTurnParams): Promise<ToolC
       secondCompletion.choices[0]?.message?.content?.trim() ||
       "Consegui consultar os dados, mas não consegui formatar uma resposta.",
     metadata: {
-      model: "gpt-4o-mini",
+      model: normalizeOpenRouterModel("gpt-4o-mini"),
       tool_calls: functionToolCalls.map((call) => call.function.name),
     },
   }

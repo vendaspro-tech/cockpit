@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { z } from "zod"
 
 import { processPendingKbSources } from "@/lib/ai/kb/ingestion"
+import { getOpenRouterApiKey } from "@/lib/ai/openrouter"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { createClient } from "@/lib/supabase/server"
 import { isSystemOwner } from "@/lib/auth-utils"
@@ -31,9 +32,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Payload inválido" }, { status: 400 })
     }
 
-    const openaiKey = process.env.OPENAI_API_KEY
-    if (!openaiKey) {
-      return NextResponse.json({ error: "OPENAI_API_KEY ausente no servidor" }, { status: 500 })
+    let openRouterKey: string
+    try {
+      openRouterKey = getOpenRouterApiKey()
+    } catch {
+      return NextResponse.json({ error: "OPENROUTER_API_KEY ausente no servidor" }, { status: 500 })
     }
 
     const admin = createAdminClient()
@@ -69,7 +72,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Falha ao agendar reindexação" }, { status: 500 })
     }
 
-    const result = await processPendingKbSources({ sourceId: parsed.data.sourceId, limit: 1 }, openaiKey)
+    const result = await processPendingKbSources({ sourceId: parsed.data.sourceId, limit: 1 }, openRouterKey)
     return NextResponse.json({ success: true, ...result })
   } catch (error) {
     console.error("KB reindex error:", error)

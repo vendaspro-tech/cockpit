@@ -11,7 +11,6 @@ import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useToast } from "@/hooks/use-toast"
 import {
-  createAgentDocument,
   deleteAgentDocument,
   updateAgentDocument,
   type AgentDocumentInput,
@@ -25,38 +24,12 @@ type AgentDocumentsProps = {
   documents: AdminAgentDocument[]
 }
 
-type AgentDocumentFormInput = Omit<AgentDocumentInput, "sourceUrl"> & { sourceUrl: string }
-
-const emptyDoc: AgentDocumentFormInput = {
-  title: "",
-  content: "",
-  type: "document" as AgentDocumentInput["type"],
-  sourceUrl: "",
-}
-
 export function AgentDocuments({ agentId, documents }: AgentDocumentsProps) {
   const { toast } = useToast()
   const router = useRouter()
   const [loading, setLoading] = useState(false)
   const [uploading, setUploading] = useState(false)
-  const [draft, setDraft] = useState<AgentDocumentFormInput>({ ...emptyDoc })
   const [editing, setEditing] = useState<AdminAgentDocument | null>(null)
-
-  const handleCreate = async () => {
-    setLoading(true)
-    try {
-      const result = await createAgentDocument(agentId, draft)
-      if (result && "error" in result) {
-        toast({ title: "Erro", description: result.error, variant: "destructive" })
-      } else {
-        toast({ title: "Documento adicionado", description: "O documento foi indexado com sucesso." })
-        setDraft({ ...emptyDoc })
-        router.refresh()
-      }
-    } finally {
-      setLoading(false)
-    }
-  }
 
   const handleDelete = async (docId: string) => {
     const confirmed = window.confirm("Excluir este documento? Isso remove o contexto do agente.")
@@ -71,26 +44,59 @@ export function AgentDocuments({ agentId, documents }: AgentDocumentsProps) {
     }
   }
 
-  const handleUploadFile = async (file: File | null) => {
-    if (!file) return
+  const uploadSingleFile = async (file: File) => {
+    const formData = new FormData()
+    formData.append("agentId", agentId)
+    formData.append("file", file)
+    const response = await fetch("/api/ai/agents/kb/upload", {
+      method: "POST",
+      body: formData,
+    })
+    const result = await response.json()
+    if (!response.ok) {
+      throw new Error(result.error || "Falha no upload")
+    }
+    return result
+  }
+
+  const handleUploadFiles = async (fileList: FileList | null) => {
+    const files = fileList ? Array.from(fileList) : []
+    if (files.length === 0) return
+
     setUploading(true)
     try {
-      const formData = new FormData()
-      formData.append("agentId", agentId)
-      formData.append("file", file)
-      const response = await fetch("/api/ai/agents/kb/upload", {
-        method: "POST",
-        body: formData,
-      })
-      const result = await response.json()
-      if (!response.ok) {
-        toast({ title: "Erro", description: result.error || "Falha no upload", variant: "destructive" })
-        return
+      let successCount = 0
+      const failedFiles: string[] = []
+
+      for (const file of files) {
+        try {
+          await uploadSingleFile(file)
+          successCount += 1
+        } catch {
+          failedFiles.push(file.name)
+        }
       }
-      toast({ title: "Upload concluído", description: "Documento indexado com sucesso." })
-      router.refresh()
-    } catch (error) {
-      toast({ title: "Erro", description: "Falha ao enviar arquivo.", variant: "destructive" })
+
+      if (successCount > 0) {
+        toast({
+          title: "Upload concluído",
+          description:
+            failedFiles.length > 0
+              ? `${successCount} arquivo(s) enviado(s). ${failedFiles.length} falharam.`
+              : `${successCount} arquivo(s) enviado(s) e indexado(s) com sucesso.`,
+        })
+        router.refresh()
+      }
+
+      if (failedFiles.length > 0) {
+        toast({
+          title: "Falha em alguns arquivos",
+          description: failedFiles.slice(0, 3).join(", "),
+          variant: "destructive",
+        })
+      }
+    } catch {
+      toast({ title: "Erro", description: "Falha ao enviar arquivos.", variant: "destructive" })
     } finally {
       setUploading(false)
     }
@@ -193,14 +199,16 @@ export function AgentDocuments({ agentId, documents }: AgentDocumentsProps) {
         <div className="space-y-3 rounded-lg border p-4">
           <div>
             <h4 className="font-medium">Upload de Arquivos (PDF, TXT, CSV)</h4>
-            <p className="text-xs text-muted-foreground">Limite de 25MB por arquivo.</p>
+            <p className="text-xs text-muted-foreground">
+              Selecione um ou vários arquivos. Limite de 25MB por arquivo.
+            </p>
           </div>
           <Label htmlFor="kb-file-upload" className="w-fit cursor-pointer">
-            <span className="sr-only">Selecionar arquivo</span>
+            <span className="sr-only">Selecionar arquivos</span>
             <Button asChild variant="outline" disabled={uploading}>
               <span>
                 <Upload className="h-4 w-4" />
-                {uploading ? "Enviando..." : "Enviar arquivo"}
+                {uploading ? "Enviando..." : "Enviar arquivos"}
               </span>
             </Button>
           </Label>
@@ -209,61 +217,12 @@ export function AgentDocuments({ agentId, documents }: AgentDocumentsProps) {
             type="file"
             className="hidden"
             accept=".pdf,.txt,.csv"
-            onChange={(e) => handleUploadFile(e.target.files?.[0] || null)}
+            multiple
+            onChange={(e) => {
+              void handleUploadFiles(e.target.files)
+              e.target.value = ""
+            }}
           />
-        </div>
-
-        <div className="grid gap-4 md:grid-cols-2">
-          <div className="space-y-2">
-            <Label>Título</Label>
-            <Input
-              value={draft.title}
-              onChange={(e) => setDraft({ ...draft, title: e.target.value })}
-              placeholder="Ex: Guia de Objeções"
-            />
-          </div>
-          <div className="space-y-2">
-            <Label>Tipo</Label>
-            <Select
-              value={draft.type}
-              onValueChange={(value) =>
-                setDraft({ ...draft, type: value as AgentDocumentInput["type"] })
-              }
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Tipo" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="document">Documento</SelectItem>
-                <SelectItem value="transcript">Transcrição</SelectItem>
-                <SelectItem value="pdi">PDI</SelectItem>
-                <SelectItem value="assessment">Avaliação</SelectItem>
-                <SelectItem value="image_extracted">Imagem extraída</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-2 md:col-span-2">
-            <Label>Conteúdo</Label>
-            <Textarea
-              value={draft.content}
-              onChange={(e) => setDraft({ ...draft, content: e.target.value })}
-              rows={6}
-              placeholder="Cole o conteúdo textual que o agente deve conhecer."
-            />
-          </div>
-          <div className="space-y-2 md:col-span-2">
-            <Label>Fonte (opcional)</Label>
-            <Input
-              value={draft.sourceUrl}
-              onChange={(e) => setDraft({ ...draft, sourceUrl: e.target.value })}
-              placeholder="https://..."
-            />
-          </div>
-          <div className="md:col-span-2">
-            <Button onClick={handleCreate} disabled={loading}>
-              Adicionar Documento
-            </Button>
-          </div>
         </div>
 
         <div className="space-y-4">

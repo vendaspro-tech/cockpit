@@ -1,4 +1,5 @@
 import { getAuthUser } from "@/lib/auth-server"
+import { getUserRole } from "@/lib/auth-utils"
 import { redirect } from "next/navigation"
 import ControlePerformanceModule from "@/components/performance/controle-performance-module"
 
@@ -14,6 +15,24 @@ export default async function PerformancePage({ params }: PerformancePageProps) 
   
   if (!user) {
     redirect('/sign-in')
+  }
+
+  const role = await getUserRole(user.id, workspaceId)
+  const normalizedRole = (role || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+
+  const canAccessPerformanceModule =
+    role === "owner" ||
+    role === "admin" ||
+    role === "system_owner" ||
+    normalizedRole.includes("supervisor") ||
+    normalizedRole.includes("gerente") ||
+    normalizedRole.includes("coordenador")
+
+  if (!canAccessPerformanceModule) {
+    redirect(`/${workspaceId}/overview`)
   }
 
   const fallbackUser = user.email?.split("@")[0] || user.id

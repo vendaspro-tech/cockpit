@@ -101,6 +101,17 @@ export function AppSidebar({
   const showComercialPro = false
   const showSkillsV2 = false
   const showEstrategia = false
+  const normalizedRole = (role || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+  const canAccessPerformanceModule =
+    role === "owner" ||
+    role === "admin" ||
+    role === "system_owner" ||
+    normalizedRole.includes("supervisor") ||
+    normalizedRole.includes("gerente") ||
+    normalizedRole.includes("coordenador")
 
   return (
     <Sidebar variant="inset" {...props}>
@@ -296,14 +307,16 @@ export function AppSidebar({
                     </a>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
-                <SidebarMenuItem className="pl-4">
-                  <SidebarMenuButton asChild isActive={pathname.includes('/performance')}>
-                    <a href={`/${workspaceId}/performance`}>
-                      <TrendingUp />
-                      <span>Controle de Performance</span>
-                    </a>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
+                {canAccessPerformanceModule ? (
+                  <SidebarMenuItem className="pl-4">
+                    <SidebarMenuButton asChild isActive={pathname.includes('/performance')}>
+                      <a href={`/${workspaceId}/performance`}>
+                        <TrendingUp />
+                        <span>Controle de Performance</span>
+                      </a>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                ) : null}
                 <SidebarMenuItem className="pl-4">
                   <SidebarMenuButton asChild isActive={pathname.includes('/assessments/def')}>
                     <a href={`/${workspaceId}/assessments/def`}>

@@ -297,6 +297,14 @@ export function AppSidebar({
                   </SidebarMenuButton>
                 </SidebarMenuItem>
                 <SidebarMenuItem className="pl-4">
+                  <SidebarMenuButton asChild isActive={pathname.includes('/performance')}>
+                    <a href={`/${workspaceId}/performance`}>
+                      <TrendingUp />
+                      <span>Controle de Performance</span>
+                    </a>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+                <SidebarMenuItem className="pl-4">
                   <SidebarMenuButton asChild isActive={pathname.includes('/assessments/def')}>
                     <a href={`/${workspaceId}/assessments/def`}>
                       <Grid3x3 />

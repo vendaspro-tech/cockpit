@@ -1,9 +1,6 @@
 import { getAuthUser } from "@/lib/auth-server"
-import { getUserRole } from "@/lib/auth-utils"
 import { redirect } from "next/navigation"
-import { getWorkspaceSquads } from "@/app/actions/squads"
-import { getTeamLeaderboard, getDashboardStats } from "@/app/actions/performance-analytics"
-import { PerformanceDashboardClient } from "@/components/performance/performance-dashboard-client"
+import ControlePerformanceModule from "@/components/performance/controle-performance-module"
 
 interface PerformancePageProps {
   params: Promise<{
@@ -19,46 +16,22 @@ export default async function PerformancePage({ params }: PerformancePageProps) 
     redirect('/sign-in')
   }
 
-  const role = await getUserRole(user.id, workspaceId)
-  
-  // Get squads based on role
-  let squads: any[] = []
-  let selectedSquadId: string | undefined = undefined
-  
-  if (role === 'owner' || role === 'admin' || role === 'system_owner') {
-    // Owners can see all squads
-    const result = await getWorkspaceSquads(workspaceId)
-    squads = result.data || []
-  } else if (role === 'leader') {
-    // Leaders see their squad(s)
-    const result = await getWorkspaceSquads(workspaceId)
-    const allSquads = result.data || []
-    squads = allSquads.filter((s: any) => s.leader_id === user.id)
-    selectedSquadId = squads[0]?.id
-  }
-  
-  // Fetch initial performance data
-  const [leaderboardData, statsData] = await Promise.all([
-    getTeamLeaderboard(workspaceId, undefined, 10, selectedSquadId),
-    getDashboardStats(workspaceId, selectedSquadId)
-  ])
+  const fallbackUser = user.email?.split("@")[0] || user.id
+  const embeddedUser = user.user_metadata?.username || fallbackUser
+  const embeddedCompany = user.user_metadata?.company || user.user_metadata?.full_name || "Workspace"
 
   return (
-    <div className="space-y-6">
+    <div key={workspaceId} className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold">Performance</h1>
-        <p className="text-muted-foreground mt-2">
-          Acompanhe métricas de desempenho e competências do time
+        <h1 className="text-3xl font-bold">Controle de Performance</h1>
+        <p className="mt-2 text-muted-foreground">
+          Gerencie metas, funil e produtividade por vendedor e por produto.
         </p>
       </div>
-
-      <PerformanceDashboardClient
+      <ControlePerformanceModule
+        embeddedUser={embeddedUser}
+        embeddedCompany={embeddedCompany}
         workspaceId={workspaceId}
-        userId={user.id}
-        role={role || 'member'}
-        squads={squads}
-        initialLeaderboard={leaderboardData}
-        initialStats={statsData}
       />
     </div>
   )

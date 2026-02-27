@@ -1,28 +1,29 @@
 "use client"
 
-import { useEffect, useMemo, useRef, useState } from "react"
-import { Plus, CheckCircle2 } from "lucide-react"
+import { useMemo, useState } from "react"
+import { CheckCircle2, Plus } from "lucide-react"
 
 import {
   getLeaderCopilotConversations,
   getLeaderCopilotMessages,
   getPendingActionsForConversation,
-  type LeaderConversationMessage,
   type LeaderConversationSummary,
 } from "@/app/actions/leader-copilot"
-import type { PendingAction } from "@/lib/types/leader-copilot"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { ScrollArea } from "@/components/ui/scroll-area"
-import { Textarea } from "@/components/ui/textarea"
+import { PromptKitChatShell } from "@/components/chat/promptkit-chat-shell"
+import { PromptKitComposer } from "@/components/chat/promptkit-composer"
+import { PromptKitMessageList } from "@/components/chat/promptkit-message-list"
 import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
 import { useToast } from "@/hooks/use-toast"
+import { useChatSession } from "@/hooks/use-chat-session"
+import { mapLeaderCopilotMessagesToVM } from "@/lib/chat/adapters/leader-copilot"
+import type { PendingAction } from "@/lib/types/leader-copilot"
 
 type LeaderCopilotChatProps = {
   workspaceId: string
   initialConversations: LeaderConversationSummary[]
   initialConversationId: string | null
-  initialMessages: LeaderConversationMessage[]
+  initialMessages: Awaited<ReturnType<typeof getLeaderCopilotMessages>>
   initialPendingActions: PendingAction[]
 }
 
@@ -37,22 +38,25 @@ export function LeaderCopilotChat({
 
   const [conversations, setConversations] = useState(initialConversations)
   const [selectedId, setSelectedId] = useState<string | null>(initialConversationId)
-  const [messages, setMessages] = useState<LeaderConversationMessage[]>(initialMessages)
-  const [pendingActions, setPendingActions] = useState<PendingAction[]>(initialPendingActions)
+  const [pendingActions, setPendingActions] = useState(initialPendingActions)
   const [input, setInput] = useState("")
-  const [loading, setLoading] = useState(false)
   const [confirmingActionId, setConfirmingActionId] = useState<string | null>(null)
 
-  const bottomRef = useRef<HTMLDivElement>(null)
+  const session = useChatSession({
+    endpoint: "/api/ai/leader-copilot/chat",
+    initialConversationId,
+    initialMessages: mapLeaderCopilotMessagesToVM(initialMessages),
+    buildPayload: ({ conversationId, message }) => ({
+      workspaceId,
+      conversationId: conversationId ?? undefined,
+      message,
+    }),
+  })
 
   const selectedConversation = useMemo(
     () => conversations.find((conversation) => conversation.id === selectedId) || null,
     [conversations, selectedId]
   )
-
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" })
-  }, [messages, pendingActions, loading])
 
   const refreshConversations = async () => {
     const updated = await getLeaderCopilotConversations(workspaceId)
@@ -61,19 +65,20 @@ export function LeaderCopilotChat({
 
   const loadConversation = async (conversationId: string) => {
     setSelectedId(conversationId)
-    const [conversationMessages, actions] = await Promise.all([
+    const [messages, actions] = await Promise.all([
       getLeaderCopilotMessages(conversationId),
       getPendingActionsForConversation(conversationId),
     ])
 
-    setMessages(conversationMessages)
+    session.reload({ conversationId, messages: mapLeaderCopilotMessagesToVM(messages) })
     setPendingActions(actions)
   }
 
   const handleNewConversation = () => {
     setSelectedId(null)
-    setMessages([])
+    setInput("")
     setPendingActions([])
+    session.reset()
   }
 
   const handleSend = async () => {
@@ -81,72 +86,28 @@ export function LeaderCopilotChat({
 
     const messageText = input.trim()
     setInput("")
-    setLoading(true)
 
-    const optimisticUser: LeaderConversationMessage = {
-      id: `${Date.now()}-user`,
-      sender: "user",
-      content: messageText,
-      created_at: new Date().toISOString(),
-      metadata: {},
-    }
-
-    setMessages((prev) => [...prev, optimisticUser])
-
-    try {
-      const response = await fetch("/api/ai/leader-copilot/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          workspaceId,
-          conversationId: selectedId ?? undefined,
-          message: messageText,
-        }),
-      })
-
-      const result = await response.json()
-
-      if (!response.ok) {
-        toast({
-          title: "Erro",
-          description: result.error || "Falha ao enviar mensagem",
-          variant: "destructive",
-        })
-        return
-      }
-
-      const assistantMessage: LeaderConversationMessage = {
-        id: `${Date.now()}-assistant`,
-        sender: "assistant",
-        content: result.message,
-        created_at: new Date().toISOString(),
-        metadata: {
-          type: result.type,
-          pendingActionId: result.pendingAction?.id ?? null,
-        },
-      }
-
-      setMessages((prev) => [...prev, assistantMessage])
-
-      if (!selectedId && result.conversationId) {
-        setSelectedId(result.conversationId)
-      }
-
-      if (result.type === "pending_action" && result.pendingAction) {
-        const actions = await getPendingActionsForConversation(result.conversationId)
-        setPendingActions(actions)
-      }
-
-      await refreshConversations()
-    } catch (error) {
+    const response = await session.send(messageText, { conversationIdOverride: selectedId })
+    if (!response.ok) {
       toast({
         title: "Erro",
-        description: "Não foi possível enviar sua mensagem.",
+        description: response.error,
         variant: "destructive",
       })
-    } finally {
-      setLoading(false)
+      return
     }
+
+    const resolvedConversationId = response.conversationId ?? selectedId
+    if (resolvedConversationId && !selectedId) {
+      setSelectedId(resolvedConversationId)
+    }
+
+    if (resolvedConversationId) {
+      const actions = await getPendingActionsForConversation(resolvedConversationId)
+      setPendingActions(actions)
+    }
+
+    await refreshConversations()
   }
 
   const handleConfirmAction = async (pendingActionId: string) => {
@@ -168,81 +129,61 @@ export function LeaderCopilotChat({
       const result = await response.json()
 
       if (!response.ok) {
-        toast({
-          title: "Erro",
-          description: result.error || "Falha ao confirmar ação",
-          variant: "destructive",
-        })
+        toast({ title: "Erro", description: result.error || "Falha ao confirmar ação", variant: "destructive" })
         return
       }
 
-      toast({
-        title: "Sucesso",
-        description: "Ação confirmada e executada.",
-      })
+      toast({ title: "Sucesso", description: "Ação confirmada e executada." })
 
-      const [conversationMessages, actions] = await Promise.all([
+      const [messages, actions] = await Promise.all([
         getLeaderCopilotMessages(selectedId),
         getPendingActionsForConversation(selectedId),
       ])
 
-      setMessages(conversationMessages)
+      session.reload({ conversationId: selectedId, messages: mapLeaderCopilotMessagesToVM(messages) })
       setPendingActions(actions)
       await refreshConversations()
     } catch (error) {
-      toast({
-        title: "Erro",
-        description: "Não foi possível confirmar a ação.",
-        variant: "destructive",
-      })
+      toast({ title: "Erro", description: "Não foi possível confirmar a ação.", variant: "destructive" })
     } finally {
       setConfirmingActionId(null)
     }
   }
 
   return (
-    <div className="grid gap-6 lg:grid-cols-[280px_1fr]">
-      <Card className="h-fit">
-        <CardHeader className="flex items-center justify-between">
-          <CardTitle className="text-base">Conversas</CardTitle>
-          <Button size="icon" variant="ghost" onClick={handleNewConversation}>
-            <Plus className="h-4 w-4" />
-          </Button>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-2">
-            {conversations.length === 0 && (
-              <p className="text-sm text-muted-foreground">Nenhuma conversa ainda.</p>
-            )}
-            {conversations.map((conversation) => (
-              <button
-                key={conversation.id}
-                className={`w-full rounded-lg border p-3 text-left text-sm ${
-                  selectedId === conversation.id ? "border-primary/60 bg-muted/30" : "border-border"
-                }`}
-                onClick={() => loadConversation(conversation.id)}
-              >
-                <p className="font-medium">{conversation.title || "Sem título"}</p>
-                <p className="text-xs text-muted-foreground">
-                  {conversation.last_message_at
-                    ? new Date(conversation.last_message_at).toLocaleString()
-                    : "Sem mensagens"}
-                </p>
-              </button>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card className="flex flex-col">
-        <CardHeader>
-          <CardTitle className="text-base">
-            Copiloto do Líder
-            {selectedConversation?.title ? ` • ${selectedConversation.title}` : ""}
-          </CardTitle>
-        </CardHeader>
-
-        <CardContent className="flex flex-1 flex-col gap-4">
+    <PromptKitChatShell
+      sidebarTitle="Conversas"
+      sidebarAction={
+        <Button size="icon" variant="ghost" onClick={handleNewConversation}>
+          <Plus className="h-4 w-4" />
+        </Button>
+      }
+      sidebarContent={
+        <div className="space-y-2">
+          {conversations.length === 0 && <p className="text-sm text-muted-foreground">Nenhuma conversa ainda.</p>}
+          {conversations.map((conversation) => (
+            <button
+              key={conversation.id}
+              className={`w-full rounded-xl border p-3 text-left text-sm transition-colors ${
+                selectedId === conversation.id
+                  ? "border-primary/50 bg-primary/5 shadow-sm"
+                  : "border-border/70 bg-background/80 hover:bg-muted/40"
+              }`}
+              onClick={() => loadConversation(conversation.id)}
+            >
+              <p className="font-medium">{conversation.title || "Sem título"}</p>
+              <p className="text-xs text-muted-foreground">
+                {conversation.last_message_at
+                  ? new Date(conversation.last_message_at).toLocaleString()
+                  : "Sem mensagens"}
+              </p>
+            </button>
+          ))}
+        </div>
+      }
+      chatTitle={`Copiloto do Líder${selectedConversation?.title ? ` • ${selectedConversation.title}` : ""}`}
+      chatContent={
+        <>
           {pendingActions.length > 0 && (
             <div className="space-y-2">
               {pendingActions.map((action) => {
@@ -276,39 +217,23 @@ export function LeaderCopilotChat({
             </div>
           )}
 
-          <ScrollArea className="h-[420px] pr-2">
-            <div className="space-y-3">
-              {messages.map((msg) => (
-                <div
-                  key={msg.id}
-                  className={`rounded-lg p-3 text-sm ${msg.sender === "user" ? "bg-primary/10" : "bg-muted/40"}`}
-                >
-                  <p className="mb-1 text-xs text-muted-foreground">{msg.sender === "user" ? "Você" : "Copiloto"}</p>
-                  <p className="whitespace-pre-wrap">{msg.content}</p>
-                </div>
-              ))}
-              {loading && (
-                <div className="rounded-lg bg-muted/40 p-3 text-sm text-muted-foreground">Pensando...</div>
-              )}
-              <div ref={bottomRef} />
-            </div>
-          </ScrollArea>
+          <PromptKitMessageList
+            messages={session.messages}
+            isLoading={session.status === "sending"}
+            loadingLabel="Pensando..."
+            assistantLabel="Copiloto"
+          />
 
-          <div className="space-y-2">
-            <Textarea
-              value={input}
-              onChange={(event) => setInput(event.target.value)}
-              placeholder="Pergunte sobre o progresso do time ou peça uma ação..."
-              rows={4}
-            />
-            <div className="flex justify-end">
-              <Button onClick={handleSend} disabled={loading || !input.trim()}>
-                Enviar
-              </Button>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-    </div>
+          <PromptKitComposer
+            value={input}
+            onChange={setInput}
+            onSubmit={handleSend}
+            placeholder="Pergunte sobre o progresso do time ou peça uma ação..."
+            disabled={session.status === "sending" || session.status === "streaming"}
+            submitLabel={session.error ? `Erro: ${session.error}` : undefined}
+          />
+        </>
+      }
+    />
   )
 }

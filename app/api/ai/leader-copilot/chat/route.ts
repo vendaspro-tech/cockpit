@@ -140,21 +140,22 @@ export async function POST(request: NextRequest) {
       .update({ last_message_at: new Date().toISOString() })
       .eq("id", resolvedConversationId)
 
-    if (result.type === "pending_action" && result.pendingAction) {
-      return NextResponse.json({
-        success: true,
-        type: "pending_action",
-        conversationId: resolvedConversationId,
-        message: result.message,
-        pendingAction: result.pendingAction,
-      })
-    }
+    const encoder = new TextEncoder()
+    const outputText = result.message?.trim() || "Não consegui gerar uma resposta agora. Tente novamente."
 
-    return NextResponse.json({
-      success: true,
-      type: "answer",
-      conversationId: resolvedConversationId,
-      message: result.message,
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(encoder.encode(outputText))
+        controller.close()
+      },
+    })
+
+    return new Response(stream, {
+      headers: {
+        "Content-Type": "text/plain; charset=utf-8",
+        "Cache-Control": "no-cache, no-transform",
+        "X-Conversation-Id": resolvedConversationId,
+      },
     })
   } catch (error) {
     console.error("Leader copilot chat error:", error)

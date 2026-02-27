@@ -9,6 +9,7 @@ import { LeaderCopilotChat } from "@/components/agents/leader-copilot-chat"
 import { Card, CardContent } from "@/components/ui/card"
 import { canAccessLeaderCopilot } from "@/lib/leader-scope"
 import { getAuthUser } from "@/lib/auth-server"
+import { DashboardHeaderConfig } from "@/components/dashboard/dashboard-header-context"
 
 interface AgentChatPageProps {
   params: Promise<{ workspaceId: string; agentId: string }>
@@ -68,10 +69,7 @@ export default async function AgentChatPage({ params }: AgentChatPageProps) {
 
     return (
       <div className="flex flex-col gap-6">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">{agent.name}</h1>
-          <p className="text-muted-foreground">{agent.description || "Assistente disponível para seu time."}</p>
-        </div>
+        <DashboardHeaderConfig title={agent.name} hideBreadcrumb />
 
         <LeaderCopilotChat
           workspaceId={workspaceId}
@@ -92,10 +90,7 @@ export default async function AgentChatPage({ params }: AgentChatPageProps) {
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">{agent.name}</h1>
-        <p className="text-muted-foreground">{agent.description || "Assistente disponível para seu time."}</p>
-      </div>
+      <DashboardHeaderConfig title={agent.name} hideBreadcrumb />
 
       <AgentChat
         agentId={agentId}

@@ -111,10 +111,16 @@ export async function POST(request: NextRequest) {
       resolvedConversationId = newConversation.id
     }
 
+    if (!resolvedConversationId) {
+      return NextResponse.json({ error: "Erro ao resolver conversa" }, { status: 500 })
+    }
+
+    const conversationIdResolved = resolvedConversationId
+
     const { error: messageError } = await supabase
       .from("ai_messages")
       .insert({
-        conversation_id: resolvedConversationId,
+        conversation_id: conversationIdResolved,
         sender: "user",
         content: message,
         metadata: {},
@@ -213,7 +219,7 @@ export async function POST(request: NextRequest) {
     const { data: attachments, error: attachmentsError } = await supabase
       .from("ai_conversation_attachments")
       .select("filename, extracted_text")
-      .eq("conversation_id", resolvedConversationId)
+      .eq("conversation_id", conversationIdResolved)
       .order("created_at", { ascending: false })
       .limit(5)
 
@@ -233,7 +239,7 @@ export async function POST(request: NextRequest) {
     const { data: recentMessages, error: historyError } = await supabase
       .from("ai_messages")
       .select("sender, content")
-      .eq("conversation_id", resolvedConversationId)
+      .eq("conversation_id", conversationIdResolved)
       .order("created_at", { ascending: false })
       .limit(12)
 
@@ -275,52 +281,75 @@ export async function POST(request: NextRequest) {
       ],
       temperature: typeof agent.temperature === "number" ? agent.temperature : 0.7,
       max_tokens: 1200,
+      stream: true,
     })
 
-    const assistantText =
-      completion.choices[0]?.message?.content?.trim() ||
-      "Não consegui gerar uma resposta agora. Tente novamente."
+    const encoder = new TextEncoder()
+    let assistantText = ""
+    let completionUsage: unknown = null
 
-    const { error: assistantError } = await supabase
-      .from("ai_messages")
-      .insert({
-        conversation_id: resolvedConversationId,
-        sender: "assistant",
-        content: assistantText,
-        metadata: {
-          model,
-          usage: completion.usage ?? null,
-          rag_documents: ragResults.map((doc) => ({
-            id: doc.id,
-            title: doc.title,
-            type: doc.type,
-            similarity: doc.similarity,
-            chunk_index: doc.chunkIndex,
-          })),
-          rag_status: {
-            chunks: ragResults.length,
-            pending_sources: pendingSources,
-            failed_sources: failedSources,
-            threshold_used: usedThreshold,
-            requires_grounding: requiresKbGrounding,
-          },
-        },
-      })
+    const stream = new ReadableStream<Uint8Array>({
+      async start(controller) {
+        try {
+          for await (const chunk of completion) {
+            const delta = chunk.choices[0]?.delta?.content || ""
+            if (delta) {
+              assistantText += delta
+              controller.enqueue(encoder.encode(delta))
+            }
+            if (chunk.usage) {
+              completionUsage = chunk.usage
+            }
+          }
 
-    if (assistantError) {
-      return NextResponse.json({ error: "Erro ao salvar resposta" }, { status: 500 })
-    }
+          const finalText = assistantText.trim() || "Não consegui gerar uma resposta agora. Tente novamente."
 
-    await supabase
-      .from("ai_conversations")
-      .update({ last_message_at: new Date().toISOString() })
-      .eq("id", resolvedConversationId)
+          const { error: assistantError } = await supabase.from("ai_messages").insert({
+            conversation_id: conversationIdResolved,
+            sender: "assistant",
+            content: finalText,
+            metadata: {
+              model,
+              usage: completionUsage,
+              rag_documents: ragResults.map((doc) => ({
+                id: doc.id,
+                title: doc.title,
+                type: doc.type,
+                similarity: doc.similarity,
+                chunk_index: doc.chunkIndex,
+              })),
+              rag_status: {
+                chunks: ragResults.length,
+                pending_sources: pendingSources,
+                failed_sources: failedSources,
+                threshold_used: usedThreshold,
+                requires_grounding: requiresKbGrounding,
+              },
+            },
+          })
 
-    return NextResponse.json({
-      success: true,
-      conversationId: resolvedConversationId,
-      message: assistantText,
-      ragCount: ragResults.length,
+          if (assistantError) {
+            console.error("Assistant message save error:", assistantError)
+          } else {
+            await supabase
+              .from("ai_conversations")
+              .update({ last_message_at: new Date().toISOString() })
+              .eq("id", conversationIdResolved)
+          }
+        } catch (streamError) {
+          console.error("Agent chat stream error:", streamError)
+        } finally {
+          controller.close()
+        }
+      },
+    })
+
+    return new Response(stream, {
+      headers: {
+        "Content-Type": "text/plain; charset=utf-8",
+        "Cache-Control": "no-cache, no-transform",
+        "X-Conversation-Id": conversationIdResolved,
+      },
     })
   } catch (error) {
     console.error("Chat error:", error)

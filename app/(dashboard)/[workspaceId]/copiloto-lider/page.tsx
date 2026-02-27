@@ -8,6 +8,7 @@ import {
   getPendingActionsForConversation,
 } from "@/app/actions/leader-copilot"
 import { LeaderCopilotChat } from "@/components/agents/leader-copilot-chat"
+import { DashboardHeaderConfig } from "@/components/dashboard/dashboard-header-context"
 
 interface LeaderCopilotPageProps {
   params: Promise<{ workspaceId: string }>
@@ -37,12 +38,7 @@ export default async function LeaderCopilotPage({ params }: LeaderCopilotPagePro
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Copiloto do Líder</h1>
-        <p className="text-muted-foreground">
-          Acompanhe progresso do time e proponha ações com confirmação explícita.
-        </p>
-      </div>
+      <DashboardHeaderConfig title="Copiloto do Líder" hideBreadcrumb />
 
       <LeaderCopilotChat
         workspaceId={workspaceId}

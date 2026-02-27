@@ -2,22 +2,17 @@ import { redirect } from 'next/navigation'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getUserWorkspaces } from "@/app/actions/workspace"
 import { AppSidebar } from "@/components/app-sidebar"
-import { NavUser } from "@/components/nav-user"
-import Link from "next/link"
-import { Bell } from "lucide-react"
-import { Button } from "@/components/ui/button"
-import { Separator } from "@/components/ui/separator"
 import {
   SidebarInset,
   SidebarProvider,
-  SidebarTrigger,
 } from "@/components/ui/sidebar"
-import { DashboardBreadcrumb } from "@/components/dashboard-breadcrumb"
 import { getAuthUser } from "@/lib/auth-server"
 import { getUserRole } from "@/lib/auth-utils"
 import { canAccessLeaderCopilot } from "@/lib/leader-scope"
 import { getPlatformFeedbackPromptState } from "@/app/actions/platform-feedback"
 import { PlatformFeedbackDialog } from "@/components/shared/platform-feedback-dialog"
+import { DashboardHeaderProvider } from "@/components/dashboard/dashboard-header-context"
+import { DashboardTopbar } from "@/components/dashboard/dashboard-topbar"
 
 interface DashboardLayoutProps {
   children: React.ReactNode
@@ -95,32 +90,16 @@ export default async function DashboardLayout({
         plan={workspace?.plan}
       />
       <SidebarInset>
-        <header className="flex h-16 shrink-0 items-center justify-between gap-2 transition-[width,height] ease-linear group-has-[[data-collapsible=icon]]/sidebar-wrapper:h-12 px-4">
-          <div className="flex items-center gap-2">
-            <SidebarTrigger className="-ml-1" />
-            <Separator
-              orientation="vertical"
-              className="mr-2 h-4"
-            />
-            <DashboardBreadcrumb 
-              workspaceId={workspaceId}
-              workspaceName={workspace?.name || 'Workspace'}
-            />
-          </div>
-          <div className="flex items-center gap-2">
-            <Button variant="ghost" size="icon" asChild>
-              <Link href={`/${workspaceId}/notifications`}>
-                <Bell className="h-4 w-4" />
-                <span className="sr-only">Notificações</span>
-              </Link>
-            </Button>
-            <NavUser />
-          </div>
-        </header>
-        <main className="flex-1 overflow-y-auto px-6 pb-6 pt-5">
-          {children}
-        </main>
-        <PlatformFeedbackDialog initialOpen={feedbackPromptState.shouldShow} />
+        <DashboardHeaderProvider>
+          <DashboardTopbar
+            workspaceId={workspaceId}
+            workspaceName={workspace?.name || 'Workspace'}
+          />
+          <main className="flex-1 overflow-y-auto px-6 pb-6 pt-5">
+            {children}
+          </main>
+          <PlatformFeedbackDialog initialOpen={feedbackPromptState.shouldShow} />
+        </DashboardHeaderProvider>
       </SidebarInset>
     </SidebarProvider>
   )
